@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/micro/cli"
 	"github.com/pquerna/otp/totp"
+	"github.com/sirupsen/logrus"
 	guaproto "github.com/syhlion/gua/proto"
+	"github.com/urfave/cli"
 	bolt "go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -19,6 +20,7 @@ import (
 
 func cmdInit(c *cli.Context) (conf *Config) {
 	var err error
+	logger = logrus.New()
 	if c.String("env-file") != "" {
 		envfile := c.String("env-file")
 		//flag.Parse()

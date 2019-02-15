@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/micro/cli"
 	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli"
 )
 
 var env *string
