@@ -1,0 +1,33 @@
+syntax = "proto3";
+package guaproto;
+message JobReplyRequest {
+   string job_id = 1;
+   string output = 2;
+   string otp_code = 3;
+}
+message JobReplyResponse {
+}
+message NodeRegisterRequest {
+   string hostname = 1;
+   string ip = 2;
+   string mac = 3;
+   string otp_token = 4;
+   string machine_code =5;
+}
+message NodeRegisterResponse {
+   int64 node_id = 1;
+}
+message Ping {
+    int64 node_id = 1;
+}
+message Pong {
+}
+
+service Gua {
+    rpc NodeRegister(NodeRegisterRequest) returns (NodeRegisterResponse){
+    }
+    rpc JobReply(JobReplyRequest) returns (JobReplyResponse){
+    }
+    rpc Heartbeat(Ping) returns (Pong){
+    }
+}

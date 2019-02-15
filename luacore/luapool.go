@@ -17,11 +17,16 @@ type LStatePool struct {
 
 func (pl *LStatePool) Get() (l *lua.LState) {
 
-	select {
-	case l = <-pl.saved:
-	default:
-		l = pl.new()
-	}
+	//因要提供給外部使用怕變數污染 取消pool
+	/*
+		select {
+		case l = <-pl.saved:
+		default:
+			l = pl.new()
+		}
+		return
+	*/
+	l = pl.new()
 	return
 }
 
@@ -34,8 +39,11 @@ func (pl *LStatePool) new() (l *lua.LState) {
 }
 
 func (pl *LStatePool) Put(L *lua.LState) {
-	select {
-	case pl.saved <- L:
-	default:
-	}
+	L.Close()
+	/*
+		select {
+		case pl.saved <- L:
+		default:
+		}
+	*/
 }

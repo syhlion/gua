@@ -1,0 +1,26 @@
+syntax = "proto3";
+package guaproto;
+message RemoteCommandRequest {
+   bytes exec_cmd = 1;
+   string job_id = 2;
+   int32 timeout = 3;
+   string otp_code = 4;
+}
+message RemoteCommandResponse {
+}
+
+message RegisterCommandRequest {
+    string job_id = 1;
+    string otp_token = 2;
+    string otp_code =3;
+}
+
+message RegisterCommandReponse {
+}
+
+service GuaNode {
+    rpc RemoteCommand(RemoteCommandRequest) returns (RemoteCommandResponse){
+    }
+    rpc RegisterCommand(RegisterCommandRequest)returns(RegisterCommandReponse){
+    }
+}

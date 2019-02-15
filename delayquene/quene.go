@@ -16,6 +16,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	"github.com/syhlion/gua/luacore"
+	guaproto "github.com/syhlion/gua/proto"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -27,6 +28,7 @@ var bucketNamePrefix = "BUCKET-[%s]"
 // job-{jobId}-{job func name}
 var jobNamePrefix = "JOB-%s-%s"
 var re = regexp.MustCompile(`^SERVER-(\d+)`)
+var UrlRe = regexp.MustCompile(`^(HTTP|REMOTE|LUA)\@(.+)?`)
 
 func incrServerNum(c redis.Conn) (num int, s string, err error) {
 	serverNum, err := redis.Int(c.Do("INCR", "SERVER_TOTAL"))
@@ -204,7 +206,7 @@ type Config struct {
 type Quene interface {
 	GenerateId() (s string)
 	Remove(jobId string) (err error)
-	Push(job *Job) (err error)
+	Push(job *guaproto.Job) (err error)
 }
 
 type q struct {
@@ -229,7 +231,7 @@ func (t *q) GenerateId() (s string) {
 func (t *q) Remove(jobId string) (err error) {
 	return t.jobQuene.Remove(jobId)
 }
-func (t *q) Push(job *Job) (err error) {
+func (t *q) Push(job *guaproto.Job) (err error) {
 
 	err = t.jobQuene.Add(job.Id, job)
 	if err != nil {
@@ -265,13 +267,16 @@ func (t *q) readyQueneWorker() {
 			log.Printf("redis scan fail, and got error: %#v\n", err)
 			continue
 		}
-		job := &Job{}
+		job := &guaproto.Job{}
 		err = proto.Unmarshal(data, job)
 		if err != nil {
 			log.Printf("json parse data fail, and got error: %#v\n", err)
 			continue
 		}
-		if job.RequestUrl != "" {
+		ss := UrlRe.FindStringSubmatch(job.RequestUrl)
+		cmdType := ss[1]
+		switch cmdType {
+		case "HTTP":
 			u, err := url.Parse(job.RequestUrl)
 			if err != nil {
 				//TODO parse錯 工作是否要放回佇列
@@ -287,12 +292,12 @@ func (t *q) readyQueneWorker() {
 				continue
 			}
 			resp.Body.Close()
-		} else {
-			//TODO execute lua
+		case "REMOTE":
+		case "LUA":
 			l := t.lpool.Get()
 			ctx, _ := context.WithTimeout(context.Background(), 60*time.Second)
 			l.SetContext(ctx)
-			err := l.DoString(string(job.LuaBody))
+			err := l.DoString(string(job.ExecCmd))
 			if err != nil {
 				t.lpool.Put(l)
 				//fmt.Println(err)
@@ -317,7 +322,6 @@ func (t *q) readyQueneWorker() {
 				fmt.Println("no func")
 				continue
 			}
-
 		}
 
 	}

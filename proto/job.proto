@@ -1,5 +1,5 @@
 syntax = "proto3";
-package delayquene;
+package guaproto;
 message Job {
    string name = 1;
    string Id = 2;
@@ -8,5 +8,5 @@ message Job {
    int64 timeout = 5;
    string interval_pattern = 6;
    string request_url =7;
-   bytes lua_body = 8;
+   bytes exec_cmd = 8;
 }
