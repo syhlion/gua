@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -63,7 +64,33 @@ func cmdInit(c *cli.Context) (conf *Config) {
 		logger.Fatal(err)
 	}
 	conf.StartTime = time.Now()
+	data, err := ioutil.ReadFile("./backup")
+	if err != nil {
+		kkey, err := totp.Generate(totp.GenerateOpts{
+			Issuer:      conf.Mac,
+			AccountName: conf.ExternalIp,
+		})
+		conf.OtpToken = kkey.Secret()
+	} else {
+		b := Backup{}
+		err := json.Unmarshal(data, &b)
+		if err != nil {
+			kkey, err := totp.Generate(totp.GenerateOpts{
+				Issuer:      conf.Mac,
+				AccountName: conf.ExternalIp,
+			})
+			conf.OtpToken = kkey.Secret()
+			return
+		}
+		conf.OtpToken = b.OtpToken
+		conf.NodeId = b.NodeId
+	}
 	return
+}
+
+type Backup struct {
+	OtpToken string
+	NodeId   int64
 }
 
 func start(c *cli.Context) {
@@ -74,31 +101,49 @@ func start(c *cli.Context) {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	kkey, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      conf.Mac,
-		AccountName: conf.ExternalIp,
-	})
-	conf.OtpToken = kkey.Secret()
 	//reply gua
 	conn, err := grpc.Dial(conf.GuaAddr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	guaClient := guaproto.NewGuaClient(conn)
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-	nreq := &guaproto.NodeRegisterRequest{
-		Ip:          conf.ExternalIp,
-		Hostname:    conf.Hostname,
-		Mac:         conf.Mac,
-		OtpToken:    kkey.Secret(),
-		MachineCode: conf.MachineCode,
+	if conf.NodeId == 0 {
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		nreq := &guaproto.NodeRegisterRequest{
+			Ip:          conf.ExternalIp,
+			Hostname:    conf.Hostname,
+			Mac:         conf.Mac,
+			OtpToken:    kkey.Secret(),
+			MachineCode: conf.MachineCode,
+		}
+		nrep, err := guaClient.NodeRegister(ctx, nreq)
+		if err != nil {
+			logger.Fatal("register fail", err)
+			return
+		}
+		conf.NodeId = nreq.NodeId
+		b := Backup{
+			NodeId:   conf.NodeId,
+			OtpToken: conf.OtpToken,
+		}
+		b, _ = json.Marshal(b)
+		ioutil.WriteFile("./bakcup", b, 0644)
 	}
-	nrep, err := guaClient.NodeRegister(ctx, nreq)
-	if err != nil {
-		logger.Fatal("register fail", err)
-		return
-	}
-	id := nrep.NodeId
+	go func() {
+		req := &guaproto.Ping{
+			NodeId: conf.NodeId,
+		}
+		t := time.NewTicker(5 * time.Second)
+		for {
+			select {
+			case t.C:
+				guaClient.Heartbeat(ctx, req)
+
+			}
+		}
+		logger.Fatal("heartbeat loss")
+
+	}()
 
 	//server
 	apiListener, err := net.Listen("tcp", conf.GrpcListen)
@@ -113,7 +158,7 @@ func start(c *cli.Context) {
 
 	// 註冊 grpc
 	sr := &Node{
-		id:        id,
+		id:        conf.NodeId,
 		cmdChan:   make(chan Command),
 		workerNum: conf.WorkerNum,
 		//httpClient:  client,

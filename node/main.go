@@ -4,9 +4,16 @@ import (
 	"os"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
+
+const (
+	BOLTBUCKET = "gua-node-bucket"
+)
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 var env *string
 var (
