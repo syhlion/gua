@@ -1,6 +1,7 @@
 package delayquene
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	fmt "fmt"
@@ -9,18 +10,23 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/yuin/gopher-lua/parse"
 
 	"github.com/bwmarrin/snowflake"
 	"github.com/gogo/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
+	"github.com/pquerna/otp/totp"
 	"github.com/syhlion/gua/luacore"
 	guaproto "github.com/syhlion/gua/proto"
 	lua "github.com/yuin/gopher-lua"
+	"google.golang.org/grpc"
 )
 
-const bucketSize = 10
+const bucketSize = 30
 
 // bucket-{uuid}-{[0-9]}
 var bucketNamePrefix = "BUCKET-[%s]"
@@ -231,12 +237,94 @@ func (t *q) GenerateId() (s string) {
 func (t *q) Remove(jobId string) (err error) {
 	return t.jobQuene.Remove(jobId)
 }
+func (t *q) RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto.NodeRegisterResponse, err error) {
+	conn := t.rpool.Get()
+	defer conn.Close()
+	id := t.node.Generate()
+	resp = &guaproto.NodeRegisterResponse{
+		NodeId: id.Int64(),
+	}
+	b, err := proto.Marshal(nodeInfo)
+	if err != nil {
+		return
+	}
+	remoteKey := fmt.Sprintf("REMOTE_NODE_%s", id)
+	_, err = conn.Do("SET", remoteKey, b, "EX", 86400)
+	return
+
+}
+func (t *q) Hearbeat(nodeId int64) (err error) {
+	conn := t.rpool.Get()
+	defer conn.Close()
+	remoteKey := fmt.Sprintf("REMOTE_NODE_%s", nodeId)
+	reply, err := redis.Int(conn.Do("EXPIRE", remoteKey, 86400))
+	if err != nil {
+		return
+	}
+	if reply == 0 {
+		return errors.New("NO_REMOTE_NODE")
+	}
+	return
+
+}
 func (t *q) Push(job *guaproto.Job) (err error) {
 
+	cc := t.rpool.Get()
+	defer cc.Close()
+	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
+	cmdType := ss[1]
+	switch cmdType {
+	case "HTTP":
+	case "REMOTE":
+		nodeIdString := ss[2]
+		nodeIds := strings.Split(nodeIdString, ",")
+		for _, nodeId := range nodeIds {
+
+			remoteKey := fmt.Sprintf("REMOTE_NODE_%s", nodeId)
+			b, err := redis.Bytes(cc.Do("GET", remoteKey))
+			if err != nil {
+				return err
+			}
+			nr := guaproto.NodeRegisterRequest{}
+			err = proto.Unmarshal(b, &nr)
+			if err != nil {
+				return err
+			}
+			conn, err := grpc.Dial(nr.Hostname, grpc.WithInsecure())
+			if err != nil {
+				return err
+			}
+			passcode, _ := totp.GenerateCode(nr.OtpToken, time.Now())
+			nodeClient := guaproto.NewGuaNodeClient(conn)
+			ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+
+			cmdReq := &guaproto.RegisterCommandRequest{
+				JobId:    job.Id,
+				OtpToken: job.OtpToken,
+				OtpCode:  passcode,
+			}
+			_, err = nodeClient.RegisterCommand(ctx, cmdReq)
+			if err != nil {
+				return err
+			}
+		}
+	case "LUA":
+		reader := bytes.NewReader(job.ExecCmd)
+		_, err = parse.Parse(reader, "<string>")
+		if err != nil {
+			return
+		}
+
+	default:
+		err = errors.New("type error")
+		return
+	}
 	err = t.jobQuene.Add(job.Id, job)
 	if err != nil {
 		return
 	}
+
+	//TODO 如果是 remote 模式 要註冊 node 是否存在
 	return t.bucket.Push(<-t.bucketNameChan, job.Exectime, job.Id)
 }
 func (t *q) readyQueneWorker() {
@@ -293,7 +381,48 @@ func (t *q) readyQueneWorker() {
 			}
 			resp.Body.Close()
 		case "REMOTE":
+			func() {
+				nodeIdString := ss[2]
+				cc := t.rpool.Get()
+				defer cc.Close()
+				nodeIds := strings.Split(nodeIdString, ",")
+				for _, nodeId := range nodeIds {
+					remoteKey := fmt.Sprintf("REMOTE_NODE_%s", nodeId)
+					b, err := redis.Bytes(cc.Do("GET", remoteKey))
+					if err != nil {
+						//TODO parse錯 工作是否要放回佇列
+						continue
+					}
+					nr := guaproto.NodeRegisterRequest{}
+					err = proto.Unmarshal(b, &nr)
+					if err != nil {
+						//TODO parse錯 工作是否要放回佇列
+						continue
+					}
+					conn, err := grpc.Dial(nr.Hostname, grpc.WithInsecure())
+					if err != nil {
+						//TODO parse錯 工作是否要放回佇列
+						continue
+					}
+					passcode, _ := totp.GenerateCode(job.OtpToken, time.Now())
+					nodeClient := guaproto.NewGuaNodeClient(conn)
+					ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+					cmdReq := &guaproto.RemoteCommandRequest{
+						ExecCmd: job.ExecCmd,
+						JobId:   job.Id,
+						Timeout: job.Timeout,
+						OtpCode: passcode,
+					}
+					_, err = nodeClient.RemoteCommand(ctx, cmdReq)
+					if err != nil {
+						//TODO parse錯 工作是否要放回佇列
+						continue
+					}
+				}
+			}()
+
 		case "LUA":
+
 			l := t.lpool.Get()
 			ctx, _ := context.WithTimeout(context.Background(), 60*time.Second)
 			l.SetContext(ctx)
@@ -374,41 +503,53 @@ func (t *q) runForDelayQuene() {
 
 func (t *q) delayQueneHandler(ti time.Time, realBucketName string) {
 	for {
-		bi, err := t.bucket.Get(realBucketName)
+		bis, err := t.bucket.Get(realBucketName)
 		if err != nil {
 			return
 		}
-		if bi.Timestamp > ti.Unix() {
-			return
-		}
-		job, err := t.jobQuene.Get(bi.JobId)
-		if err != nil {
-			//log.Println(err)
-			continue
-		}
-		if job.Exectime > ti.Unix() {
-			t.bucket.Remove(realBucketName, bi.JobId)
-			t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
-			continue
-		}
+		for _, bi := range bis {
+			if bi.Timestamp > ti.Unix() {
+				return
+			}
+			func() {
+				var err error
+				defer func() {
+					if err != nil {
+						t.bucket.Remove(realBucketName, bi.JobId)
+					}
+				}()
+				job, err := t.jobQuene.Get(bi.JobId)
+				if err != nil {
+					t.bucket.Remove(realBucketName, bi.JobId)
+					t.jobQuene.Remove(bi.JobId)
+					return
+				}
 
-		//push to ready quene
-		b, err := proto.Marshal(job)
-		if err != nil {
-			//fmt.Println(err)
-			return
-		}
-		c := t.rpool.Get()
-		c.Do("RPUSH", "GUA-READY-JOB", b)
-		c.Close()
-		//remove bucket
+				if job.Exectime > ti.Unix() {
+					t.bucket.Remove(realBucketName, bi.JobId)
+					t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
+					return
+				}
 
-		t.bucket.Remove(realBucketName, bi.JobId)
-		if job.IntervalPattern != "@once" {
-			sch, _ := Parse(job.IntervalPattern)
-			job.Exectime = sch.Next(time.Now()).Unix()
-			t.jobQuene.Add(bi.JobId, job)
-			t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
+				//push to ready quene
+				b, err := proto.Marshal(job)
+				if err != nil {
+					//fmt.Println(err)
+					return
+				}
+				c := t.rpool.Get()
+				c.Do("RPUSH", "GUA-READY-JOB", b)
+				c.Close()
+				//remove bucket
+
+				t.bucket.Remove(realBucketName, bi.JobId)
+				if job.IntervalPattern != "@once" {
+					sch, _ := Parse(job.IntervalPattern)
+					job.Exectime = sch.Next(time.Now()).Unix()
+					t.jobQuene.Add(bi.JobId, job)
+					t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
+				}
+			}()
 		}
 
 	}

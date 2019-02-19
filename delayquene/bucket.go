@@ -1,8 +1,6 @@
 package delayquene
 
 import (
-	"errors"
-
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -21,15 +19,16 @@ func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
 	_, err = c.Do("ZADD", key, timestamp, jobId)
 	return
 }
-func (b *Bucket) Get(key string) (item *BucketItem, err error) {
+func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 	c := b.rpool.Get()
 	defer c.Close()
-	reply, err := redis.Values(c.Do("ZRANGE", key, 0, 0, "WITHSCORES"))
+	reply, err := redis.Values(c.Do("ZRANGE", key, 0, 30, "WITHSCORES"))
 	if err != nil {
 		return
 	}
-	item = &BucketItem{}
+	items = make([]*BucketItem, 0)
 	for i := 0; i < len(reply); i += 2 {
+		item := &BucketItem{}
 		key, err := redis.String(reply[i], nil)
 		if err != nil {
 			return nil, err
@@ -38,13 +37,13 @@ func (b *Bucket) Get(key string) (item *BucketItem, err error) {
 		if err != nil {
 			return nil, err
 		}
+		if item.JobId == "" {
+			continue
+		}
 		item.JobId = key
 		item.Timestamp = value
+		items = append(items, item)
 	}
-	if item.JobId == "" || item.Timestamp <= 0 {
-		return nil, errors.New("no zrange")
-	}
-
 	return
 
 }
