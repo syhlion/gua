@@ -3,7 +3,7 @@ package guaproto;
 message RemoteCommandRequest {
    bytes exec_cmd = 1;
    string job_id = 2;
-   int32 timeout = 3;
+   int64 timeout = 3;
    string otp_code = 4;
 }
 message RemoteCommandResponse {

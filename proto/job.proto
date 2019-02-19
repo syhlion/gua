@@ -4,7 +4,7 @@ message Job {
    string name = 1;
    string Id = 2;
    int64 exectime = 3;
-   int64 register_time = 4;
+   string otp_token = 4;
    int64 timeout = 5;
    string interval_pattern = 6;
    string request_url =7;
