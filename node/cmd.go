@@ -5,10 +5,16 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"strings"
+	"syscall"
+	"text/template"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"
@@ -70,6 +76,9 @@ func cmdInit(c *cli.Context) (conf *Config) {
 			Issuer:      conf.Mac,
 			AccountName: conf.ExternalIp,
 		})
+		if err != nil {
+			logger.Fatal(err)
+		}
 		conf.OtpToken = kkey.Secret()
 	} else {
 		b := Backup{}
@@ -79,6 +88,9 @@ func cmdInit(c *cli.Context) (conf *Config) {
 				Issuer:      conf.Mac,
 				AccountName: conf.ExternalIp,
 			})
+			if err != nil {
+				logger.Fatal(err)
+			}
 			conf.OtpToken = kkey.Secret()
 			return
 		}
@@ -113,7 +125,7 @@ func start(c *cli.Context) {
 			Ip:          conf.ExternalIp,
 			Hostname:    conf.Hostname,
 			Mac:         conf.Mac,
-			OtpToken:    kkey.Secret(),
+			OtpToken:    conf.OtpToken,
 			MachineCode: conf.MachineCode,
 		}
 		nrep, err := guaClient.NodeRegister(ctx, nreq)
@@ -121,27 +133,48 @@ func start(c *cli.Context) {
 			logger.Fatal("register fail", err)
 			return
 		}
-		conf.NodeId = nreq.NodeId
-		b := Backup{
+		conf.NodeId = nrep.NodeId
+		back := Backup{
 			NodeId:   conf.NodeId,
 			OtpToken: conf.OtpToken,
 		}
-		b, _ = json.Marshal(b)
-		ioutil.WriteFile("./bakcup", b, 0644)
+		b, _ := json.Marshal(back)
+		ioutil.WriteFile("./backup", b, 0644)
 	}
+
+	//heartbeat
+	heartbeatErr := make(chan error)
 	go func() {
+		var err error
+		defer func() {
+			//判斷 error 是否因為 timeout 才需要刪除 backup
+			if err != nil {
+				if strings.Contains(err.Error(), "NO_REMOTE_NODE") {
+					err = os.Remove("./backup")
+					if err != nil {
+						logger.Error(err)
+					}
+				}
+			}
+		}()
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		req := &guaproto.Ping{
 			NodeId: conf.NodeId,
 		}
 		t := time.NewTicker(5 * time.Second)
 		for {
 			select {
-			case t.C:
-				guaClient.Heartbeat(ctx, req)
+			case <-t.C:
+
+				_, err = guaClient.Heartbeat(ctx, req)
+				if err != nil {
+					heartbeatErr <- err
+					return
+				}
 
 			}
 		}
-		logger.Fatal("heartbeat loss")
+		logger.Error("heartbeat loss")
 
 	}()
 
@@ -170,8 +203,33 @@ func start(c *cli.Context) {
 	guaproto.RegisterGuaNodeServer(grpc, sr)
 
 	reflection.Register(grpc)
-	if err := grpc.Serve(apiListener); err != nil {
-		log.Fatal(" grpc.Serve Error: ", err)
-		return
+	httpErr := make(chan error)
+	grpcErr := make(chan error)
+	httpApiListener, err := net.Listen("tcp", conf.HttpListen)
+	r := mux.NewRouter()
+	r.HandleFunc("/node_id", GetNodeId(sr)).Methods("GET")
+	server := http.Server{
+		ReadTimeout: 3 * time.Second,
+		Handler:     r,
 	}
+	go func() {
+		httpErr <- server.Serve(httpApiListener)
+	}()
+
+	go func() {
+		grpcErr <- grpc.Serve(apiListener)
+	}()
+	shutdow_observer := make(chan os.Signal, 1)
+	t := template.Must(template.New("node start msg").Parse(nodeMsgFormat))
+	t.Execute(os.Stdout, conf)
+	signal.Notify(shutdow_observer, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	select {
+	case err := <-grpcErr:
+		logger.Error(err)
+	case err := <-httpErr:
+		logger.Error(err)
+	case err := <-heartbeatErr:
+		logger.Error(err)
+	}
+	return
 }
