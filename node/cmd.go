@@ -102,7 +102,7 @@ func cmdInit(c *cli.Context) (conf *Config) {
 
 type Backup struct {
 	OtpToken string
-	NodeId   int64
+	NodeId   string
 }
 
 func start(c *cli.Context) {
@@ -119,7 +119,7 @@ func start(c *cli.Context) {
 		log.Fatalf("did not connect: %v", err)
 	}
 	guaClient := guaproto.NewGuaClient(conn)
-	if conf.NodeId == 0 {
+	if conf.NodeId == "" {
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		nreq := &guaproto.NodeRegisterRequest{
 			Ip:          conf.ExternalIp,
@@ -158,8 +158,10 @@ func start(c *cli.Context) {
 			}
 		}()
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		code, _ := totp.GenerateCode(conf.OtpToken, time.Now())
 		req := &guaproto.Ping{
-			NodeId: conf.NodeId,
+			NodeId:  conf.NodeId,
+			OtpCode: code,
 		}
 		t := time.NewTicker(5 * time.Second)
 		for {

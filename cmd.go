@@ -1,0 +1,189 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"text/template"
+	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
+	"github.com/syhlion/greq"
+	"github.com/syhlion/gua/delayquene"
+	guaproto "github.com/syhlion/gua/proto"
+	requestwork "github.com/syhlion/requestwork.v2"
+	"github.com/urfave/cli"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+)
+
+func cmdInit(c *cli.Context) (conf *Config) {
+	var err error
+	logger = logrus.New()
+	if c.String("env-file") != "" {
+		envfile := c.String("env-file")
+		//flag.Parse()
+		err := godotenv.Load(envfile)
+		if err != nil {
+			logger.Fatal(err)
+		}
+	}
+	conf = &Config{}
+
+	conf.GrpcListen = os.Getenv("GRPC_LISTEN")
+	if conf.GrpcListen == "" {
+		logger.Fatal("empty env GRPC_LISTEN")
+	}
+	conf.HttpListen = os.Getenv("HTTP_LISTEN")
+	if conf.HttpListen == "" {
+		logger.Fatal("empty env HTTP_LISTEN")
+	}
+	conf.Hostname, err = GetHostname()
+	if err != nil {
+		logger.Fatal(err)
+	}
+	conf.ExternalIp, err = GetExternalIP()
+	if err != nil {
+		logger.Fatal(err)
+	}
+	conf.Mac, err = GetMacAddr()
+	if err != nil {
+		logger.Fatal(err)
+	}
+	conf.JobReplyHook = os.Getenv("JOB_REPLY_HOOK")
+	conf.RedisForApiAddr = os.Getenv("REDIS_FOR_API_ADDR")
+	if conf.RedisForApiAddr == "" {
+		logger.Fatal("empty env REDIS_FOR_API_ADDR")
+	}
+	conf.RedisForApiDBNo, err = strconv.Atoi(os.Getenv("REDIS_FOR_API_DB_NO"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_API_DB_NO")
+	}
+	conf.RedisForApiMaxIdle, err = strconv.Atoi(os.Getenv("REDIS_FOR_API_MAX_IDLE"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_API_MAX_IDLE")
+	}
+	conf.RedisForApiMaxConn, err = strconv.Atoi(os.Getenv("REDIS_FOR_API_MAX_CONN"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_API_ADDR")
+	}
+
+	conf.RedisForReadyAddr = os.Getenv("REDIS_FOR_READY_ADDR")
+	if conf.RedisForReadyAddr == "" {
+		logger.Fatal("empty env REDIS_FOR_READY_ADDR")
+	}
+	conf.RedisForReadyDBNo, err = strconv.Atoi(os.Getenv("REDIS_FOR_READY_DB_NO"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_READY_DB_NO")
+	}
+	conf.RedisForReadyMaxIdle, err = strconv.Atoi(os.Getenv("REDIS_FOR_READY_MAX_IDLE"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_READY_MAX_IDLE")
+	}
+	conf.RedisForReadyMaxConn, err = strconv.Atoi(os.Getenv("REDIS_FOR_READY_MAX_CONN"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_READY_MAX_CONN")
+	}
+
+	conf.RedisForDelayQueneAddr = os.Getenv("REDIS_FOR_DELAY_QUENE_ADDR")
+	if conf.RedisForDelayQueneAddr == "" {
+		logger.Fatal("empty env REDIS_FOR_DELAY_QUENE_ADDR")
+	}
+	conf.RedisForDelayQueneDBNo, err = strconv.Atoi(os.Getenv("REDIS_FOR_DELAY_QUENE_DB_NO"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_DELAY_QUENE_DB_NO")
+	}
+	conf.RedisForDelayQueneMaxIdle, err = strconv.Atoi(os.Getenv("REDIS_FOR_DELAY_QUENE_MAX_IDLE"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_DELAY_QUENE_MAX_IDLE")
+	}
+	conf.RedisForDelayQueneMaxConn, err = strconv.Atoi(os.Getenv("REDIS_FOR_DELAY_QUENE_MAX_CONN"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_DELAY_QUENE_MAX_CONN")
+	}
+	conf.StartTime = time.Now()
+	return
+}
+
+func start(c *cli.Context) {
+
+	conf := cmdInit(c)
+	dconf := &delayquene.Config{
+		RedisForReadyAddr:         conf.RedisForReadyAddr,
+		RedisForReadyDBNo:         conf.RedisForReadyDBNo,
+		RedisForReadyMaxIdle:      conf.RedisForReadyMaxIdle,
+		RedisForReadyMaxConn:      conf.RedisForReadyMaxConn,
+		RedisForDelayQueneAddr:    conf.RedisForDelayQueneAddr,
+		RedisForDelayQueneDBNo:    conf.RedisForDelayQueneDBNo,
+		RedisForDelayQueneMaxIdle: conf.RedisForDelayQueneMaxIdle,
+		RedisForDelayQueneMaxConn: conf.RedisForDelayQueneMaxConn,
+		MachineIp:                 conf.ExternalIp,
+		MachineMac:                conf.Mac,
+		MachineHost:               conf.Hostname,
+		JobReplyUrl:               conf.JobReplyHook,
+		Logger:                    logger,
+	}
+	quene, err := delayquene.New(dconf)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	//server
+	apiListener, err := net.Listen("tcp", conf.GrpcListen)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	work := requestwork.New(100)
+	client := greq.New(work, 60*time.Second, true)
+
+	// 註冊 grpc
+	sr := &Gua{
+		config:     conf,
+		httpClient: client,
+		quene:      quene,
+	}
+
+	grpc := grpc.NewServer()
+	guaproto.RegisterGuaServer(grpc, sr)
+
+	reflection.Register(grpc)
+	httpErr := make(chan error)
+	grpcErr := make(chan error)
+	httpApiListener, err := net.Listen("tcp", conf.HttpListen)
+	r := mux.NewRouter()
+	r.HandleFunc("/add", AddJob(quene, conf)).Methods("POST")
+	r.HandleFunc("/remove", RemoveJob(quene)).Methods("DELETE")
+	r.HandleFunc("/get", GetJob(quene)).Methods("GET")
+	r.HandleFunc("/edit", EditJob(quene)).Methods("POST")
+	server := http.Server{
+		ReadTimeout: 3 * time.Second,
+		Handler:     r,
+	}
+	go func() {
+		httpErr <- server.Serve(httpApiListener)
+	}()
+
+	go func() {
+		grpcErr <- grpc.Serve(apiListener)
+	}()
+	shutdow_observer := make(chan os.Signal, 1)
+	t := template.Must(template.New("gua start msg").Parse(guaMsgFormat))
+	t.Execute(os.Stdout, conf)
+	signal.Notify(shutdow_observer, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	select {
+	case err := <-grpcErr:
+		logger.Error(err)
+	case err := <-httpErr:
+		logger.Error(err)
+	}
+	return
+}

@@ -19,12 +19,21 @@ type Result struct {
 	err    error
 }
 type Command struct {
-	cmd     string
-	timeout int
-	jobId   string
+	planTime           int64
+	execTime           int64
+	getJobTime         int64
+	execJobMachineHost string
+	execJobMachineMac  string
+	execJobMachineIp   string
+	getJobMachineHost  string
+	getJobMachineMac   string
+	getJobMachineIp    string
+	cmd                string
+	timeout            int
+	jobId              string
 }
 type Node struct {
-	id        int64
+	id        string
 	config    *Config
 	cmdChan   chan Command
 	workerNum int
@@ -51,6 +60,7 @@ func (n *Node) RemoteCommand(ctx context.Context, req *guaproto.RemoteCommandReq
 		return
 	}
 	if !totp.Validate(req.OtpCode, otpToken) {
+		logger.Warn("remote command auth error. request:%#v, otp-token:%s", req, n.otpToken)
 		return nil, status.Errorf(codes.PermissionDenied, "otp code error")
 	}
 	cmd := Command{
@@ -61,6 +71,7 @@ func (n *Node) RemoteCommand(ctx context.Context, req *guaproto.RemoteCommandReq
 	select {
 	case n.cmdChan <- cmd:
 	default:
+		logger.Warn("server busy. request:%#v", req)
 		return nil, status.Errorf(codes.Aborted, "node busy")
 	}
 
@@ -68,12 +79,14 @@ func (n *Node) RemoteCommand(ctx context.Context, req *guaproto.RemoteCommandReq
 }
 func (n *Node) RegisterCommand(ctx context.Context, req *guaproto.RegisterCommandRequest) (resp *guaproto.RegisterCommandReponse, err error) {
 	if !totp.Validate(req.OtpCode, n.otpToken) {
+		logger.Warn("register command auth error. request:%#v, otp-token:%s", req, n.otpToken)
 		return nil, status.Errorf(codes.PermissionDenied, "otp code error")
 	}
 
 	err = n.localdb.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("gua-node-bucket"))
 		if err != nil {
+			logger.WithError(err).Warn("local db update error. request:%#v", req)
 			return fmt.Errorf("create bucket: %s", err)
 		}
 		b.Put([]byte(req.JobId), []byte(req.OtpToken))
@@ -128,20 +141,27 @@ func (n *Node) worker() {
 		passcode, _ := totp.GenerateCode(n.otpToken, time.Now())
 		ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
 
-		var output string
-		if r.err != nil {
-			output = r.err.Error()
-		} else {
-			output = r.output
-		}
 		replyRequest := &guaproto.JobReplyRequest{
-			JobId:   command.jobId,
-			Output:  output,
-			OtpCode: passcode,
+			JobId:              command.jobId,
+			OtpCode:            passcode,
+			PlanTime:           command.planTime,
+			ExecTime:           command.execTime,
+			FinishTime:         time.Now().Unix(),
+			ExecJobMachineHost: command.execJobMachineHost,
+			ExecJobMachineMac:  command.execJobMachineMac,
+			ExecJobMachineIp:   command.execJobMachineIp,
+			GetJobMachineHost:  command.getJobMachineHost,
+			GetJobMachineMac:   command.getJobMachineMac,
+			GetJobMachineIp:    command.getJobMachineIp,
+		}
+		if r.err != nil {
+			replyRequest.Error = r.err.Error()
+		} else {
+			replyRequest.Success = r.output
 		}
 		_, err := n.guaClient.JobReply(ctx, replyRequest)
 		if err != nil {
-			logger.Errorf("reply error: %#v", err)
+			logger.Errorf("reply error: %#v, reply request:%#v", err, replyRequest)
 		}
 	}
 }

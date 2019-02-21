@@ -5,6 +5,16 @@ message RemoteCommandRequest {
    string job_id = 2;
    int64 timeout = 3;
    string otp_code = 4;
+   int64 plan_time = 5;
+   int64 exec_time = 6;
+   string exec_job_machine_host = 7;
+   string exec_job_machine_mac = 8;
+   string exec_job_machine_ip = 9;
+   string get_job_machine_host = 10;
+   string get_job_machine_mac = 11;
+   string get_job_machine_ip = 12;
+
+
 }
 message RemoteCommandResponse {
 }

@@ -12,7 +12,7 @@ type Config struct {
 	GrpcListen  string
 	HttpListen  string
 	OtpToken    string
-	NodeId      int64
+	NodeId      string
 	StartTime   time.Time
 }
 

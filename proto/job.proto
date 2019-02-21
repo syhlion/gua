@@ -10,3 +10,17 @@ message Job {
    string request_url =7;
    bytes exec_cmd = 8;
 }
+
+message ReadyJob {
+   string name = 1;
+   string Id = 2;
+   string otp_token = 3;
+   int64 timeout = 4;
+   string request_url =5;
+   bytes exec_cmd = 6;
+   int64 plan_time = 7;
+   int64 get_job_time = 8;
+   string get_job_machine_host = 9;
+   string get_job_machine_mac = 10;
+   string get_job_machine_ip = 11;
+}

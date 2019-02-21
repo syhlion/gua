@@ -1,0 +1,22 @@
+package admin
+
+type Payload struct {
+	FinishTime         int64  `json:"finish_time"`
+	PlanTime           int64  `json:"plan_time"`
+	ExecTime           int64  `json:"exec_time"`
+	GetJobTime         int64  `json:"get_job_time"`
+	JobId              string `json:"job_id"`
+	Error              string `json:"error"`
+	Type               string `json:"type"`
+	Success            string `json:"success"`
+	ExecJobMachineHost string `json:exec_job_machine_host"`
+	ExecJobMachineMac  string `json:exec_job_machine_mac"`
+	ExecJobMachineIp   string `json:exec_job_machine_ip"`
+	GetJobMachineHost  string `json:get_job_machine_host"`
+	GetJobMachineMac   string `json:get_job_machine_mac"`
+	GetJobMachineIp    string `json:get_job_machine_ip"`
+	ExecMachineHost    string `json:exec_machine_host"`
+	RemoteNodeMac      string `json:exec_machine_mac"`
+	RemoteNodeIp       string `json:exec_machine_ip"`
+	RemoteNodeHost     string `json:exec_machine_host"`
+}

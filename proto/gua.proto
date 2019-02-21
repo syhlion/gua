@@ -2,8 +2,19 @@ syntax = "proto3";
 package guaproto;
 message JobReplyRequest {
    string job_id = 1;
-   string output = 2;
-   string otp_code = 3;
+   string success = 2;
+   string error = 3;
+   string otp_code = 4;
+   int64 plan_time = 5;
+   int64 exec_time = 6;
+   int64 finish_time = 7;
+   int64 get_job_time =8;
+   string exec_job_machine_host = 9;
+   string exec_job_machine_mac = 10;
+   string exec_job_machine_ip = 11;
+   string get_job_machine_host = 12;
+   string get_job_machine_mac = 13;
+   string get_job_machine_ip = 14;
 }
 message JobReplyResponse {
 }
@@ -15,10 +26,11 @@ message NodeRegisterRequest {
    string machine_code =5;
 }
 message NodeRegisterResponse {
-   int64 node_id = 1;
+   string node_id = 1;
 }
 message Ping {
-    int64 node_id = 1;
+    string node_id = 1;
+    string otp_code = 2;
 }
 message Pong {
 }
