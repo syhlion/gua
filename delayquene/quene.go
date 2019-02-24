@@ -308,7 +308,15 @@ func (t *q) Push(job *guaproto.Job) (err error) {
 			if err != nil {
 				return err
 			}
-			conn, err := grpc.Dial(nr.Hostname, grpc.WithInsecure())
+			var addr string
+			if nr.BoradcastAddr != "" {
+				addr = nr.BoradcastAddr
+			} else {
+				ss := strings.Split(nr.Grpclisten, ":")
+				addr = nr.Ip + ":" + ss[1]
+
+			}
+			conn, err := grpc.Dial(addr, grpc.WithInsecure())
 			if err != nil {
 				return err
 			}
@@ -422,7 +430,15 @@ func (t *q) executeJob(job *guaproto.ReadyJob) (err error) {
 				t.config.Logger.WithError(err).Errorf("nodeinfo unmarshal error. remotekey:%s. job:%#v", remoteKey, job)
 				continue
 			}
-			conn, err := grpc.Dial(nr.Hostname, grpc.WithInsecure())
+			var addr string
+			if nr.BoradcastAddr != "" {
+				addr = nr.BoradcastAddr
+			} else {
+				ss := strings.Split(nr.Grpclisten, ":")
+				addr = nr.Ip + ":" + ss[1]
+
+			}
+			conn, err := grpc.Dial(addr, grpc.WithInsecure())
 			if err != nil {
 				t.config.Logger.WithError(err).Errorf("nodeinfo connect error. remotekey:%s. job:%#v", remoteKey, job)
 				continue

@@ -15,6 +15,7 @@ message JobReplyRequest {
    string get_job_machine_host = 12;
    string get_job_machine_mac = 13;
    string get_job_machine_ip = 14;
+   string node_id = 15;
 }
 message JobReplyResponse {
 }
@@ -23,7 +24,9 @@ message NodeRegisterRequest {
    string ip = 2;
    string mac = 3;
    string otp_token = 4;
-   string machine_code =5;
+   string boradcast_addr = 5;
+   string grpclisten = 6;
+   string machine_code = 7;
 }
 message NodeRegisterResponse {
    string node_id = 1;

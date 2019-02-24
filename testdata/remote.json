@@ -1,0 +1,8 @@
+{
+  "name": "Hello",
+  "exec_time": 0,
+  "request_url": "REMOTE@1099600286869098496",
+  "interval_pattern": "@once",
+  "exec_command": "./curl.sh",
+  "timeout": 10
+}

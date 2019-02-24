@@ -49,6 +49,9 @@ func cmdInit(c *cli.Context) (conf *Config) {
 	if conf.MachineCode == "" {
 		logger.Fatal("empty env MACHINE_CODE")
 	}
+	//選填
+	conf.BoradcastAddr = os.Getenv("BORADCAST_ADDR")
+
 	conf.GrpcListen = os.Getenv("GRPC_LISTEN")
 	if conf.GrpcListen == "" {
 		logger.Fatal("empty env GRPC_LISTEN")
@@ -113,6 +116,13 @@ func start(c *cli.Context) {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	//server
+	apiListener, err := net.Listen("tcp", conf.GrpcListen)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
 	//reply gua
 	conn, err := grpc.Dial(conf.GuaAddr, grpc.WithInsecure())
 	if err != nil {
@@ -122,11 +132,13 @@ func start(c *cli.Context) {
 	if conf.NodeId == "" {
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		nreq := &guaproto.NodeRegisterRequest{
-			Ip:          conf.ExternalIp,
-			Hostname:    conf.Hostname,
-			Mac:         conf.Mac,
-			OtpToken:    conf.OtpToken,
-			MachineCode: conf.MachineCode,
+			Ip:            conf.ExternalIp,
+			Hostname:      conf.Hostname,
+			Mac:           conf.Mac,
+			OtpToken:      conf.OtpToken,
+			BoradcastAddr: conf.BoradcastAddr,
+			Grpclisten:    apiListener.Addr().String(),
+			MachineCode:   conf.MachineCode,
 		}
 		nrep, err := guaClient.NodeRegister(ctx, nreq)
 		if err != nil {
@@ -178,12 +190,6 @@ func start(c *cli.Context) {
 
 	}()
 
-	//server
-	apiListener, err := net.Listen("tcp", conf.GrpcListen)
-	if err != nil {
-		log.Println(err)
-		return
-	}
 	/*
 		work := requestwork.New(5)
 		client := greq.New(work, 60*time.Second, true)
@@ -192,12 +198,14 @@ func start(c *cli.Context) {
 	// 註冊 grpc
 	sr := &Node{
 		id:        conf.NodeId,
-		cmdChan:   make(chan Command),
+		cmdChan:   make(chan Command, 1000),
 		workerNum: conf.WorkerNum,
 		//httpClient:  client,
 		guaClient: guaClient,
 		otpToken:  conf.OtpToken,
+		localdb:   db,
 	}
+	go sr.run()
 
 	grpc := grpc.NewServer()
 	guaproto.RegisterGuaNodeServer(grpc, sr)

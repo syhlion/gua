@@ -34,7 +34,7 @@ func (g *Gua) JobReply(ctx context.Context, req *guaproto.JobReplyRequest) (resp
 	conn := g.rpool.Get()
 	defer conn.Close()
 	logger.Infof("receive jobreply. request:%#v", req)
-	remoteKey := fmt.Sprintf("REMOTE_NODE_%s", req.JobId)
+	remoteKey := fmt.Sprintf("REMOTE_NODE_%s", req.NodeId)
 	b, err := redis.Bytes(conn.Do("GET", remoteKey))
 	if err != nil {
 		return nil, status.Error(codes.PermissionDenied, "machine code error")

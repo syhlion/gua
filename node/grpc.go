@@ -47,10 +47,7 @@ func (n *Node) RemoteCommand(ctx context.Context, req *guaproto.RemoteCommandReq
 
 	var otpToken string
 	err = n.localdb.View(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte("gua-node-bucket"))
-		if err != nil {
-			return fmt.Errorf("create bucket: %s", err)
-		}
+		b := tx.Bucket([]byte("gua-node-bucket"))
 		v := b.Get([]byte(req.JobId))
 		otpToken = string(v)
 
@@ -93,7 +90,7 @@ func (n *Node) RegisterCommand(ctx context.Context, req *guaproto.RegisterComman
 
 		return nil
 	})
-	return
+	return &guaproto.RegisterCommandReponse{}, nil
 }
 func (n *Node) exec(ctx context.Context, command string) (r Result) {
 	cmd := exec.Command("/bin/bash", "-c", command)
@@ -103,13 +100,14 @@ func (n *Node) exec(ctx context.Context, command string) (r Result) {
 	resultChan := make(chan Result)
 	go func() {
 		output, err := cmd.CombinedOutput()
-		fmt.Printf("PID: %d", cmd.Process.Pid)
+		logger.Infof("PID :%d finish \n", cmd.Process.Pid)
 		resultChan <- Result{string(output), err}
 	}()
+
 	select {
 	case <-ctx.Done():
 		if cmd.Process.Pid > 0 {
-			fmt.Println(cmd.Process.Pid)
+			logger.Warnf("PID: %d kill\n", cmd.Process.Pid)
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		}
 		r = Result{
@@ -134,15 +132,15 @@ func (n *Node) worker() {
 		if command.timeout <= 0 || time.Duration(command.timeout) > 24*time.Hour {
 			duration = 24 * time.Hour
 		} else {
-			duration = time.Duration(command.timeout)
+			duration = time.Duration(command.timeout) * time.Second
 		}
 		ctx, _ := context.WithTimeout(context.Background(), duration)
 		r := n.exec(ctx, command.cmd)
 		passcode, _ := totp.GenerateCode(n.otpToken, time.Now())
-		ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
 
 		replyRequest := &guaproto.JobReplyRequest{
 			JobId:              command.jobId,
+			NodeId:             n.id,
 			OtpCode:            passcode,
 			PlanTime:           command.planTime,
 			ExecTime:           command.execTime,
