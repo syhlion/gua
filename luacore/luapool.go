@@ -32,8 +32,6 @@ func (pl *LStatePool) Get() (l *lua.LState) {
 
 func (pl *LStatePool) new() (l *lua.LState) {
 	l = lua.NewState()
-	l.PreloadModule("httpclient", CurlLoader)
-	l.PreloadModule("mysql", MysqlLoader)
 	libs.Preload(l)
 	return
 }

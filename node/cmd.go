@@ -157,17 +157,16 @@ func start(c *cli.Context) {
 				}
 			}
 		}()
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		code, _ := totp.GenerateCode(conf.OtpToken, time.Now())
-		req := &guaproto.Ping{
-			NodeId:  conf.NodeId,
-			OtpCode: code,
-		}
 		t := time.NewTicker(5 * time.Second)
 		for {
 			select {
 			case <-t.C:
-
+				ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+				code, _ := totp.GenerateCode(conf.OtpToken, time.Now())
+				req := &guaproto.Ping{
+					NodeId:  conf.NodeId,
+					OtpCode: code,
+				}
 				_, err = guaClient.Heartbeat(ctx, req)
 				if err != nil {
 					heartbeatErr <- err
@@ -176,7 +175,6 @@ func start(c *cli.Context) {
 
 			}
 		}
-		logger.Error("heartbeat loss")
 
 	}()
 
@@ -226,6 +224,8 @@ func start(c *cli.Context) {
 	t.Execute(os.Stdout, conf)
 	signal.Notify(shutdow_observer, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	select {
+	case <-shutdow_observer:
+		logger.Info("stop")
 	case err := <-grpcErr:
 		logger.Error(err)
 	case err := <-httpErr:

@@ -40,7 +40,8 @@ var (
 	logger        *logrus.Logger
 	nodeMsgFormat = "\ngua-node start at \"{{.GetStartTime}}\"\tserver ip:\"{{.ExternalIp}}\"\tversion:\"{{.Version}}\"\tcomplie at \"{{.CompileDate}}\"\n" +
 		"http_listen:\"{{.HttpListen}}\"\n" +
-		"grpc_addr:\"{{.GrpcAddr}}\"\n" +
+		"grpc_listen:\"{{.GrpcListen}}\"\n" +
+		"gua_addr:\"{{.GuaAddr}}\"\n" +
 		"hostname:\"{{.Hostname}}\"\n" +
 		"mac:\"{{.Mac}}\"\n" +
 		"otp_token:\"{{.OtpToken}}\"\n" +

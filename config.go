@@ -3,6 +3,8 @@ package main
 import "time"
 
 type Config struct {
+	CompileDate               string
+	Version                   string
 	Hostname                  string
 	Mac                       string
 	ExternalIp                string

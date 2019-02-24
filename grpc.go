@@ -85,11 +85,10 @@ func (g *Gua) Heartbeat(ctx context.Context, req *guaproto.Ping) (resp *guaproto
 	logger.Infof("receive node heartbeat. request:%#v", req)
 	conn := g.rpool.Get()
 	defer conn.Close()
-	logger.Infof("receive jobreply. request:%#v", req)
 	remoteKey := fmt.Sprintf("REMOTE_NODE_%s", req.NodeId)
 	b, err := redis.Bytes(conn.Do("GET", remoteKey))
 	if err != nil {
-		return nil, status.Error(codes.PermissionDenied, "machine code error")
+		return nil, status.Error(codes.PermissionDenied, "NO_REMOTE_NODE")
 	}
 	nodeInfo := &guaproto.NodeRegisterRequest{}
 

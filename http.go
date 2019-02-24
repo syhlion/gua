@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -29,32 +29,36 @@ func AddJob(quene delayquene.Quene, conf *Config) func(w http.ResponseWriter, r 
 		}
 
 		payload := &AddJobPayload{}
-		json.Unmarshal(body, payload)
+		err = json.Unmarshal(body, payload)
 		if err != nil {
 			log.Printf("Error json umnarsal: %v", err)
 			restresp.Write(w, err, http.StatusBadRequest)
 			return
 		}
-		if payload.Name != "" {
-			restresp.Write(w, errors.New("payload no name"), http.StatusBadRequest)
+		if payload.Name == "" {
+			fmt.Println("hihih")
+			restresp.Write(w, "payload no name", http.StatusBadRequest)
 			return
 		}
-		if payload.Exectime >= 0 {
-			restresp.Write(w, errors.New("payload exec_time error"), http.StatusBadRequest)
+		if payload.Exectime < 0 {
+			restresp.Write(w, "payload exec_time error", http.StatusBadRequest)
 			return
 		}
-		if payload.IntervalPattern != "" {
-			restresp.Write(w, errors.New("payload no interval_pattern"), http.StatusBadRequest)
+		if payload.IntervalPattern == "" {
+			fmt.Println("testest")
+			restresp.Write(w, "payload no interval_pattern", http.StatusBadRequest)
 			return
 		}
-		if payload.RequestUrl != "" {
-			restresp.Write(w, errors.New("payload no request_url"), http.StatusBadRequest)
+		if payload.RequestUrl == "" {
+			restresp.Write(w, "payload no request_url", http.StatusBadRequest)
 			return
 		}
-		if payload.ExecCommand != "" {
-			restresp.Write(w, errors.New("payload no exec_command"), http.StatusBadRequest)
-			return
-		}
+		/*
+			if payload.ExecCommand == "" {
+				restresp.Write(w, "payload no exec_command", http.StatusBadRequest)
+				return
+			}
+		*/
 		kkey, err := totp.Generate(totp.GenerateOpts{
 			Issuer:      conf.Mac,
 			AccountName: conf.ExternalIp,
@@ -73,7 +77,11 @@ func AddJob(quene delayquene.Quene, conf *Config) func(w http.ResponseWriter, r 
 			RequestUrl:      payload.RequestUrl,
 			ExecCmd:         []byte(payload.ExecCommand),
 		}
-		quene.Push(job)
+		err = quene.Push(job)
+		if err != nil {
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		//nodeId := strconv.FormatInt(node.id, 10)
 		restresp.Write(w, job.Id, http.StatusOK)

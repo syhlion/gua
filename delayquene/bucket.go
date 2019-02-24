@@ -37,10 +37,10 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 		if err != nil {
 			return nil, err
 		}
+		item.JobId = key
 		if item.JobId == "" {
 			continue
 		}
-		item.JobId = key
 		item.Timestamp = value
 		items = append(items, item)
 	}

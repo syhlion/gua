@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -108,6 +107,12 @@ func cmdInit(c *cli.Context) (conf *Config) {
 	if err != nil {
 		logger.Fatal("empty env REDIS_FOR_DELAY_QUENE_MAX_CONN")
 	}
+	conf.MachineCode = os.Getenv("MACHINE_CODE")
+	if conf.MachineCode == "" {
+		logger.Fatal("empty env REDIS_FOR_DELAY_QUENE_MAX_CONN")
+	}
+	conf.CompileDate = compileDate
+	conf.Version = version
 	conf.StartTime = time.Now()
 	return
 }
@@ -132,7 +137,7 @@ func start(c *cli.Context) {
 	}
 	quene, err := delayquene.New(dconf)
 	if err != nil {
-		fmt.Println(err)
+		logger.Fatal(err)
 		return
 	}
 	//server
@@ -150,6 +155,7 @@ func start(c *cli.Context) {
 		config:     conf,
 		httpClient: client,
 		quene:      quene,
+		rpool:      quene.GetDelayQueneRedis(),
 	}
 
 	grpc := grpc.NewServer()
@@ -180,6 +186,8 @@ func start(c *cli.Context) {
 	t.Execute(os.Stdout, conf)
 	signal.Notify(shutdow_observer, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	select {
+	case <-shutdow_observer:
+		logger.Info("receive signal")
 	case err := <-grpcErr:
 		logger.Error(err)
 	case err := <-httpErr:

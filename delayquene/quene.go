@@ -187,7 +187,7 @@ func New(config *Config) (quene Quene, err error) {
 		num:        num,
 		bucketName: fmt.Sprintf(bucketNamePrefix, name) + "-%d",
 		config:     config,
-		timers:     make([]*time.Ticker, 10),
+		timers:     make([]*time.Ticker, bucketSize),
 		lpool:      lpool,
 		bucket:     bucket,
 		jobQuene:   jobQuene,
@@ -221,6 +221,7 @@ type Config struct {
 }
 
 type Quene interface {
+	GetDelayQueneRedis() (pool *redis.Pool)
 	Heartbeat(nodeId string) (err error)
 	GenerateUID() (s string)
 	Remove(jobId string) (err error)
@@ -244,6 +245,9 @@ type q struct {
 	httpClient     *greq.Client
 }
 
+func (t *q) GetDelayQueneRedis() (pool *redis.Pool) {
+	return t.rpool
+}
 func (t *q) GenerateUID() (s string) {
 	return t.node.Generate().String()
 }
@@ -383,14 +387,18 @@ func (t *q) executeJob(job *guaproto.ReadyJob) (err error) {
 	cmdType = ss[1]
 	switch cmdType {
 	case "HTTP":
-		u, err := url.Parse(job.RequestUrl)
+		u, err := url.Parse(ss[2])
 		if err != nil {
 			t.config.Logger.WithError(err).Errorf("http url parse error. job:%#v", job)
 			return err
 		}
+		passcode, _ := totp.GenerateCode(job.OtpToken, time.Now())
 		q := u.Query()
 		q.Set("job_id", job.Id)
 		q.Set("job_name", job.Name)
+		q.Set("otp_code", passcode)
+
+		u.RawQuery = q.Encode()
 		_, _, err = t.httpClient.Get(u.String(), nil)
 		if err != nil {
 			t.config.Logger.WithError(err).Errorf("http get error. job:%#v", job)
@@ -516,7 +524,7 @@ func (t *q) readyQueneWorker() {
 }
 func (t *q) runForReadQuene() {
 	t.once1.Do(func() {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < bucketSize; i++ {
 			go t.readyQueneWorker()
 		}
 
@@ -559,70 +567,69 @@ func (t *q) runForDelayQuene() {
 	})
 }
 
-func (t *q) delayQueneHandler(ti time.Time, realBucketName string) {
-	for {
-		bis, err := t.bucket.Get(realBucketName)
-		if err != nil {
+func (t *q) delayQueneHandler(ti time.Time, realBucketName string) (err error) {
+
+	bis, err := t.bucket.Get(realBucketName)
+	if err != nil {
+		return
+	}
+	for _, bi := range bis {
+		if bi.Timestamp > ti.Unix() {
 			return
 		}
-		for _, bi := range bis {
-			if bi.Timestamp > ti.Unix() {
-				return
-			}
-			func() {
-				var err error
-				defer func() {
-					if err != nil {
-						t.bucket.Remove(realBucketName, bi.JobId)
-					}
-				}()
-				job, err := t.jobQuene.Get(bi.JobId)
+		func() {
+			var err error
+			defer func() {
 				if err != nil {
 					t.bucket.Remove(realBucketName, bi.JobId)
-					t.jobQuene.Remove(bi.JobId)
-					return
-				}
-
-				if job.Exectime > ti.Unix() {
-					t.bucket.Remove(realBucketName, bi.JobId)
-					t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
-					return
-				}
-				rj := &guaproto.ReadyJob{
-					Name:              job.Name,
-					Id:                job.Id,
-					OtpToken:          job.OtpToken,
-					Timeout:           job.Timeout,
-					RequestUrl:        job.RequestUrl,
-					ExecCmd:           job.ExecCmd,
-					PlanTime:          job.Exectime,
-					GetJobTime:        time.Now().Unix(),
-					GetJobMachineHost: t.config.MachineHost,
-					GetJobMachineMac:  t.config.MachineMac,
-					GetJobMachineIp:   t.config.MachineIp,
-				}
-
-				//push to ready quene
-				b, err := proto.Marshal(rj)
-				if err != nil {
-					//fmt.Println(err)
-					return
-				}
-				c := t.rpool.Get()
-				c.Do("RPUSH", "GUA-READY-JOB", b)
-				c.Close()
-				//remove bucket
-
-				t.bucket.Remove(realBucketName, bi.JobId)
-				if job.IntervalPattern != "@once" {
-					sch, _ := Parse(job.IntervalPattern)
-					job.Exectime = sch.Next(time.Now()).Unix()
-					t.jobQuene.Add(bi.JobId, job)
-					t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
 				}
 			}()
-		}
+			job, err := t.jobQuene.Get(bi.JobId)
+			if err != nil {
+				t.bucket.Remove(realBucketName, bi.JobId)
+				t.jobQuene.Remove(bi.JobId)
+				return
+			}
 
+			if job.Exectime > ti.Unix() {
+				t.bucket.Remove(realBucketName, bi.JobId)
+				t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
+				return
+			}
+			rj := &guaproto.ReadyJob{
+				Name:              job.Name,
+				Id:                job.Id,
+				OtpToken:          job.OtpToken,
+				Timeout:           job.Timeout,
+				RequestUrl:        job.RequestUrl,
+				ExecCmd:           job.ExecCmd,
+				PlanTime:          job.Exectime,
+				GetJobTime:        time.Now().Unix(),
+				GetJobMachineHost: t.config.MachineHost,
+				GetJobMachineMac:  t.config.MachineMac,
+				GetJobMachineIp:   t.config.MachineIp,
+			}
+
+			//push to ready quene
+			b, err := proto.Marshal(rj)
+			if err != nil {
+				//fmt.Println(err)
+				return
+			}
+			c := t.rpool.Get()
+			c.Do("RPUSH", "GUA-READY-JOB", b)
+			c.Close()
+			//remove bucket
+
+			t.bucket.Remove(realBucketName, bi.JobId)
+			if job.IntervalPattern != "@once" {
+				sch, _ := Parse(job.IntervalPattern)
+				job.Exectime = sch.Next(time.Now()).Unix()
+				t.jobQuene.Add(bi.JobId, job)
+				t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
+			}
+		}()
 	}
 
+	return
 }

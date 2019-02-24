@@ -36,7 +36,7 @@ var (
 	logger       *logrus.Logger
 	guaMsgFormat = "\ngua start at \"{{.GetStartTime}}\"\tserver ip:\"{{.ExternalIp}}\"\tversion:\"{{.Version}}\"\tcomplie at \"{{.CompileDate}}\"\n" +
 		"http_listen:\"{{.HttpListen}}\"\n" +
-		"grpc_addr:\"{{.GrpcAddr}}\"\n" +
+		"grpc_listen:\"{{.GrpcListen}}\"\n" +
 		"hostname:\"{{.Hostname}}\"\n" +
 		"mac:\"{{.Mac}}\"\n" +
 		"worker_num:\"{{.WorkerNum}}\"\n" +
@@ -47,9 +47,9 @@ var (
 		"redis_for_ready_addr:\"{{.RedisForReadyAddr}}\"\t" + "redis_for_api_dbno:\"{{.RedisForReadyDBNo}}\"\n" +
 		"redis_for_ready_max_idle:\"{{.RedisForReadyMaxIdle}}\"\n" +
 		"redis_for_ready_max_conn:\"{{.RedisForReadyMaxConn}}\"\n" +
-		"redis_for_delay_addr:\"{{.RedisForDelayAddr}}\"\t" + "redis_for_api_dbno:\"{{.RedisForDelayDBNo}}\"\n" +
-		"redis_for_delay_max_idle:\"{{.RedisForDelayMaxIdle}}\"\n" +
-		"redis_for_delay_max_conn:\"{{.RedisForDelayMaxConn}}\"\n\n"
+		"redis_for_delay_quene_addr:\"{{.RedisForDelayQueneAddr}}\"\t" + "redis_for_delay_quene_dbno:\"{{.RedisForDelayQueneDBNo}}\"\n" +
+		"redis_for_delay_quene_max_idle:\"{{.RedisForDelayQueneMaxIdle}}\"\n" +
+		"redis_for_delay_quene_max_conn:\"{{.RedisForDelayQueneMaxConn}}\"\n\n"
 )
 
 func main() {
