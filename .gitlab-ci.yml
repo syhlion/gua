@@ -25,21 +25,6 @@ build:linux:
     - build/
   only:
   - tags
-build:windows:
-  image: golang:1.11.2
-  stage: build
-  script:
-    - export GO111MODULE=on
-    - ln -s $PWD $GOPATH/src/gua
-    - cd $GOPATH/src/gua
-    - make build/windows
-  artifacts:
-    when: on_success
-    name: "gua_${CI_BUILD_NAME}_${CI_BUILD_REF_NAME}"
-    paths:
-    - build/
-  only:
-  - tags
 build:darwin:
   image: golang:1.11.2
   stage: build

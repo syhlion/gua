@@ -18,13 +18,6 @@ build/linux:
 	cp env.example build/ &&  cp node/env.example build/node/ && cp -R testdata build/
 build/linux_amd64.tar.gz: build/linux
 	$(call tar,linux,amd64,)
-build/windows: 
-	go test
-	$(call buildgua,windows,amd64,.exe)
-	$(call buildguanode,windows,amd64,.exe)
-	cp env.example build/ &&  cp node/env.example build/node/ && cp -R testdata build/
-build/windows_amd64.tar.gz: build/windows
-	$(call tar,windows,amd64,.exe)
 build/darwin: 
 	go test
 	$(call buildgua,darwin,amd64,)
