@@ -55,11 +55,3 @@ build:darwin:
     - build/
   only:
   - tags
-test:
-  image: golang:1.11.2
-  stage: test
-  script:
-    - export GO111MODULE=on
-    - ln -s $PWD $GOPATH/src/gua
-    - cd $GOPATH/src/gua
-    - make test
