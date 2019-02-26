@@ -49,7 +49,7 @@ Body:
 Example:
 
 ```
-$ curl "@http.json" http://{{yourhost}}/add
+$ curl -d "@http.json" -X POST http://{{yourhost}}/add
 ```
 
 
