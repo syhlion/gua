@@ -500,20 +500,8 @@ func (t *q) readyQueneWorker() {
 	var data []byte
 	for {
 
-		//註冊兩個工作佇列
-		err := c.Send("BLPOP", "GUA-READY-JOB", 0)
-		if err != nil {
-			t.config.Logger.WithError(err).Errorf("redis pop error")
-			continue
-		}
-		err = c.Flush()
-		if err != nil {
-			t.config.Logger.WithError(err).Errorf("redis flush error")
-			continue
-		}
-
 		//這邊會block住 等收訊息
-		reply, err := redis.Values(c.Receive())
+		reply, err := redis.Values(c.Do("BLPOP", "GUA-READY-JOB", 0))
 		if err != nil {
 			//有可能因為timeout error  重新取一再跑一次迴圈
 			t.config.Logger.WithError(err).Errorf("redis receive fail")
