@@ -1,13 +1,17 @@
 [unrelease]
 
 
-[Remove]
+[Add]
 
+* add luaweb core
+
+[Remove]
 * remove luacore loader.go
 
 [Fix]
 * fix readme
 * fix delayquene BLPOP use c.Do
+* fix glua redis lib bug
 
 [v1.0.0.beta1] 2019-02-25
 
