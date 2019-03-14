@@ -46,6 +46,10 @@ func cmdInit(c *cli.Context) (conf *Config) {
 	if conf.HttpListen == "" {
 		logger.Fatal("empty env HTTP_LISTEN")
 	}
+	conf.HttpFuncListen = os.Getenv("HTTP_FUNC_LISTEN")
+	if conf.HttpFuncListen == "" {
+		logger.Fatal("empty env HTTP_FUNC_LISTEN")
+	}
 	conf.Hostname, err = GetHostname()
 	if err != nil {
 		logger.Fatal(err)
@@ -139,25 +143,6 @@ func cmdInit(c *cli.Context) (conf *Config) {
 func start(c *cli.Context) {
 
 	conf := cmdInit(c)
-	dconf := &delayquene.Config{
-		RedisForGroupAddr:         conf.RedisForGroupAddr,
-		RedisForGroupDBNo:         conf.RedisForGroupDBNo,
-		RedisForGroupMaxIdle:      conf.RedisForGroupMaxIdle,
-		RedisForGroupMaxConn:      conf.RedisForGroupMaxConn,
-		RedisForReadyAddr:         conf.RedisForReadyAddr,
-		RedisForReadyDBNo:         conf.RedisForReadyDBNo,
-		RedisForReadyMaxIdle:      conf.RedisForReadyMaxIdle,
-		RedisForReadyMaxConn:      conf.RedisForReadyMaxConn,
-		RedisForDelayQueneAddr:    conf.RedisForDelayQueneAddr,
-		RedisForDelayQueneDBNo:    conf.RedisForDelayQueneDBNo,
-		RedisForDelayQueneMaxIdle: conf.RedisForDelayQueneMaxIdle,
-		RedisForDelayQueneMaxConn: conf.RedisForDelayQueneMaxConn,
-		MachineIp:                 conf.ExternalIp,
-		MachineMac:                conf.Mac,
-		MachineHost:               conf.Hostname,
-		JobReplyUrl:               conf.JobReplyHook,
-		Logger:                    logger,
-	}
 	//init ready quene redis pool
 	apiRedis := redis.NewPool(func() (redis.Conn, error) {
 		c, err := redis.Dial("tcp", conf.RedisForApiAddr)
@@ -173,21 +158,109 @@ func start(c *cli.Context) {
 	}, 10)
 	apiRedis.MaxIdle = conf.RedisForApiMaxIdle
 	apiRedis.MaxActive = conf.RedisForApiMaxConn
-	apiconn := apiRedis.Get()
-	defer apiconn.Close()
+	func() (err error) {
+		apiconn := apiRedis.Get()
+		defer apiconn.Close()
 
-	// Test the connection
-	_, err := apiconn.Do("PING")
+		// Test the connection
+		_, err = apiconn.Do("PING")
+		if err != nil {
+			logger.Fatal(err)
+			return
+		}
+		return
+	}()
+	groupRedis := redis.NewPool(func() (redis.Conn, error) {
+		c, err := redis.Dial("tcp", conf.RedisForGroupAddr)
+		if err != nil {
+			return nil, err
+		}
+		_, err = c.Do("SELECT", conf.RedisForGroupDBNo)
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		return c, nil
+	}, 10)
+	groupRedis.MaxIdle = conf.RedisForGroupMaxIdle
+	groupRedis.MaxActive = conf.RedisForGroupMaxConn
+	func() (err error) {
+		groupconn := groupRedis.Get()
+		defer groupconn.Close()
+
+		// Test the connection
+		_, err = groupconn.Do("PING")
+		if err != nil {
+			logger.Fatal(err)
+			return
+		}
+		return
+	}()
+	delayRedis := redis.NewPool(func() (redis.Conn, error) {
+		c, err := redis.Dial("tcp", conf.RedisForDelayQueneAddr)
+		if err != nil {
+			return nil, err
+		}
+		_, err = c.Do("SELECT", conf.RedisForDelayQueneDBNo)
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		return c, nil
+	}, 10)
+	delayRedis.MaxIdle = conf.RedisForDelayQueneMaxIdle
+	delayRedis.MaxActive = conf.RedisForDelayQueneMaxConn
+	func() (err error) {
+		delayconn := delayRedis.Get()
+		defer delayconn.Close()
+
+		// Test the connection
+		_, err = delayconn.Do("PING")
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		return
+	}()
+	readyRedis := redis.NewPool(func() (redis.Conn, error) {
+		c, err := redis.Dial("tcp", conf.RedisForReadyAddr)
+		if err != nil {
+			return nil, err
+		}
+		_, err = c.Do("SELECT", conf.RedisForReadyDBNo)
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		return c, nil
+	}, 10)
+	readyRedis.MaxIdle = conf.RedisForReadyMaxIdle
+	readyRedis.MaxActive = conf.RedisForReadyMaxConn
+	func() (err error) {
+		readyconn := readyRedis.Get()
+		defer readyconn.Close()
+
+		// Test the connection
+		_, err = readyconn.Do("PING")
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		return
+	}()
+	dconf := &delayquene.Config{
+		MachineIp:   conf.ExternalIp,
+		MachineMac:  conf.Mac,
+		MachineHost: conf.Hostname,
+		JobReplyUrl: conf.JobReplyHook,
+		Logger:      logger,
+	}
+	quene, err := delayquene.New(dconf, groupRedis, readyRedis, delayRedis)
 	if err != nil {
 		logger.Fatal(err)
 		return
 	}
 	lpool := luacore.New()
-	quene, err := delayquene.New(dconf)
-	if err != nil {
-		logger.Fatal(err)
-		return
-	}
 	//server
 	apiListener, err := net.Listen("tcp", conf.GrpcListen)
 	if err != nil {
@@ -197,6 +270,12 @@ func start(c *cli.Context) {
 
 	work := requestwork.New(100)
 	client := greq.New(work, 60*time.Second, true)
+
+	group := &Group{
+		apiRedis:   apiRedis,
+		groupRedis: groupRedis,
+		delayRedis: delayRedis,
+	}
 
 	// 註冊 grpc
 	sr := &Gua{
@@ -211,21 +290,34 @@ func start(c *cli.Context) {
 
 	reflection.Register(grpc)
 	httpErr := make(chan error)
+	httpFuncErr := make(chan error)
 	grpcErr := make(chan error)
 	httpApiListener, err := net.Listen("tcp", conf.HttpListen)
 	r := mux.NewRouter()
 	r.HandleFunc("/register", RegisterGroup(quene, conf)).Methods("POST")
 	r.HandleFunc("/add", AddJob(quene, conf)).Methods("POST")
+	r.HandleFunc("/addfunc", AddFunc(group, apiRedis, lpool)).Methods("POST")
 	r.HandleFunc("/remove", RemoveJob(quene)).Methods("DELETE")
 	r.HandleFunc("/get", GetJob(quene)).Methods("GET")
 	r.HandleFunc("/edit", EditJob(quene)).Methods("POST")
-	r.HandleFunc("/luatest", LuaEntrance(apiRedis, lpool))
+	//r.HandleFunc("/luatest", LuaEntrance(apiRedis, lpool))
 	server := http.Server{
 		ReadTimeout: 3 * time.Second,
 		Handler:     r,
 	}
 	go func() {
 		httpErr <- server.Serve(httpApiListener)
+	}()
+
+	httpFuncListener, err := net.Listen("tcp", conf.HttpFuncListen)
+	rFunc := mux.NewRouter()
+	rFunc.HandleFunc("/{group_name}/{func_name}", LuaEntrance(group, apiRedis, lpool))
+	serverFunc := http.Server{
+		ReadTimeout: 3 * time.Second,
+		Handler:     rFunc,
+	}
+	go func() {
+		httpFuncErr <- serverFunc.Serve(httpFuncListener)
 	}()
 
 	go func() {
@@ -239,6 +331,8 @@ func start(c *cli.Context) {
 	case <-shutdow_observer:
 		logger.Info("receive signal")
 	case err := <-grpcErr:
+		logger.Error(err)
+	case err := <-httpFuncErr:
 		logger.Error(err)
 	case err := <-httpErr:
 		logger.Error(err)

@@ -4,6 +4,8 @@
 [Add]
 * add group api
 * add luaweb core
+* add func api
+
 
 [Remove]
 * remove luacore loader.go

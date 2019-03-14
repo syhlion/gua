@@ -39,7 +39,6 @@ var (
 		"grpc_listen:\"{{.GrpcListen}}\"\n" +
 		"hostname:\"{{.Hostname}}\"\n" +
 		"mac:\"{{.Mac}}\"\n" +
-		"worker_num:\"{{.WorkerNum}}\"\n" +
 		"machine_code:\"{{.MachineCode}}\"\n" +
 		"redis_for_group_addr:\"{{.RedisForGroupAddr}}\"\t" + "redis_for_group_dbno:\"{{.RedisForGroupDBNo}}\"\n" +
 		"redis_for_group_max_idle:\"{{.RedisForGroupMaxIdle}}\"\n" +

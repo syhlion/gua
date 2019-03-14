@@ -8,9 +8,9 @@ type Config struct {
 	Hostname                  string
 	Mac                       string
 	ExternalIp                string
-	WorkerNum                 int
 	GrpcListen                string
 	HttpListen                string
+	HttpFuncListen            string
 	RedisForApiAddr           string
 	RedisForApiDBNo           int
 	RedisForApiMaxIdle        int

@@ -99,82 +99,12 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 
 }
 
-func New(config *Config) (quene Quene, err error) {
+func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRedis *redis.Pool) (quene Quene, err error) {
 
 	// init lua pool
 	lpool := luacore.New()
 
-	//init ready quene redis pool
-	rfr := redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", config.RedisForReadyAddr)
-		if err != nil {
-			return nil, err
-		}
-		_, err = c.Do("SELECT", config.RedisForReadyDBNo)
-		if err != nil {
-			c.Close()
-			return nil, err
-		}
-		return c, nil
-	}, 10)
-	rfr.MaxIdle = config.RedisForReadyMaxIdle
-	rfr.MaxActive = config.RedisForReadyMaxConn
-	rfrconn := rfr.Get()
-	defer rfrconn.Close()
-
-	// Test the connection
-	_, err = rfrconn.Do("PING")
-	if err != nil {
-		return
-	}
-	//init user redis pool
-	urpool := redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", config.RedisForGroupAddr)
-		if err != nil {
-			return nil, err
-		}
-		_, err = c.Do("SELECT", config.RedisForGroupDBNo)
-		if err != nil {
-			c.Close()
-			return nil, err
-		}
-		return c, nil
-	}, 10)
-	urpool.MaxIdle = config.RedisForGroupMaxIdle
-	urpool.MaxActive = config.RedisForGroupMaxConn
-	urpconn := urpool.Get()
-	defer urpconn.Close()
-
-	// Test the connection
-	_, err = urpconn.Do("PING")
-	if err != nil {
-		return
-	}
-
-	//init delay quene redis pool
-	rfd := redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", config.RedisForDelayQueneAddr)
-		if err != nil {
-			return nil, err
-		}
-		_, err = c.Do("SELECT", config.RedisForDelayQueneDBNo)
-		if err != nil {
-			c.Close()
-			return nil, err
-		}
-		return c, nil
-	}, 10)
-	rfd.MaxIdle = config.RedisForDelayQueneMaxIdle
-	rfd.MaxActive = config.RedisForDelayQueneMaxConn
-	rfdconn := rfd.Get()
-	defer rfdconn.Close()
-
-	// Test the connection
-	_, err = rfdconn.Do("PING")
-	if err != nil {
-		return
-	}
-	num, name, err := initName(rfd)
+	num, name, err := initName(delayRedis)
 	if err != nil {
 		return
 	}
@@ -183,17 +113,19 @@ func New(config *Config) (quene Quene, err error) {
 		for {
 			select {
 			case <-t.C:
-				conn := rfd.Get()
-				conn.Do("SET", name, time.Now().Unix())
-				conn.Close()
+				func() {
+					conn := delayRedis.Get()
+					defer conn.Close()
+					conn.Do("SET", name, time.Now().Unix())
+				}()
 			}
 		}
 	}()
 	bucket := &Bucket{
-		rpool: rfd,
+		rpool: delayRedis,
 	}
 	jobQuene := &JobQuene{
-		rpool: rfd,
+		rpool: delayRedis,
 	}
 	node, err := snowflake.NewNode(int64(num))
 	if err != nil {
@@ -204,8 +136,8 @@ func New(config *Config) (quene Quene, err error) {
 	worker := &Worker{
 		bucketName:  fmt.Sprintf(bucketNamePrefix, name) + "-%d",
 		timers:      make([]*time.Ticker, bucketSize),
-		rpool:       rfr,
-		urpool:      urpool,
+		rpool:       readyRedis,
+		urpool:      groupRedis,
 		once1:       &sync.Once{},
 		once2:       &sync.Once{},
 		httpClient:  client,
@@ -229,8 +161,8 @@ func New(config *Config) (quene Quene, err error) {
 		lpool:          lpool,
 		bucket:         bucket,
 		jobQuene:       jobQuene,
-		rpool:          rfr,
-		urpool:         urpool,
+		rpool:          readyRedis,
+		urpool:         groupRedis,
 		worker:         worker,
 		bucketNameChan: bucketChan,
 	}
@@ -242,15 +174,6 @@ func New(config *Config) (quene Quene, err error) {
 }
 
 type Config struct {
-	RedisForGroupAddr         string
-	RedisForGroupDBNo         int
-	RedisForGroupMaxIdle      int
-	RedisForGroupMaxConn      int
-	RedisForReadyAddr         string
-	RedisForReadyDBNo         int
-	RedisForReadyMaxIdle      int
-	RedisForReadyMaxConn      int
-	RedisForDelayQueneAddr    string
 	RedisForDelayQueneDBNo    int
 	RedisForDelayQueneMaxIdle int
 	RedisForDelayQueneMaxConn int
