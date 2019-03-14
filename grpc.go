@@ -34,7 +34,7 @@ func (g *Gua) JobReply(ctx context.Context, req *guaproto.JobReplyRequest) (resp
 	conn := g.rpool.Get()
 	defer conn.Close()
 	logger.Infof("receive jobreply. request:%#v", req)
-	remoteKey := fmt.Sprintf("REMOTE_NODE_%s", req.NodeId)
+	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", req.GroupName, req.NodeId)
 	b, err := redis.Bytes(conn.Do("GET", remoteKey))
 	if err != nil {
 		return nil, status.Error(codes.PermissionDenied, "machine code error")
@@ -85,22 +85,7 @@ func (g *Gua) Heartbeat(ctx context.Context, req *guaproto.Ping) (resp *guaproto
 	logger.Infof("receive node heartbeat. request:%#v", req)
 	conn := g.rpool.Get()
 	defer conn.Close()
-	remoteKey := fmt.Sprintf("REMOTE_NODE_%s", req.NodeId)
-	b, err := redis.Bytes(conn.Do("GET", remoteKey))
-	if err != nil {
-		return nil, status.Error(codes.PermissionDenied, "NO_REMOTE_NODE")
-	}
-	nodeInfo := &guaproto.NodeRegisterRequest{}
-
-	err = proto.Unmarshal(b, nodeInfo)
-	if err != nil {
-
-		return nil, status.Error(codes.Aborted, "nodeinfo unmarshal error")
-	}
-	if !totp.Validate(req.OtpCode, nodeInfo.OtpToken) {
-		return nil, status.Error(codes.PermissionDenied, "otp error")
-	}
-	err = g.quene.Heartbeat(req.NodeId)
+	err = g.quene.Heartbeat(req.NodeId, req.GroupName)
 	if err != nil {
 		return nil, err
 	}

@@ -41,6 +41,9 @@ var (
 		"mac:\"{{.Mac}}\"\n" +
 		"worker_num:\"{{.WorkerNum}}\"\n" +
 		"machine_code:\"{{.MachineCode}}\"\n" +
+		"redis_for_group_addr:\"{{.RedisForGroupAddr}}\"\t" + "redis_for_group_dbno:\"{{.RedisForGroupDBNo}}\"\n" +
+		"redis_for_group_max_idle:\"{{.RedisForGroupMaxIdle}}\"\n" +
+		"redis_for_group_max_conn:\"{{.RedisForGroupMaxConn}}\"\n" +
 		"redis_for_api_addr:\"{{.RedisForApiAddr}}\"\t" + "redis_for_api_dbno:\"{{.RedisForApiDBNo}}\"\n" +
 		"redis_for_api_max_idle:\"{{.RedisForApiMaxIdle}}\"\n" +
 		"redis_for_api_max_conn:\"{{.RedisForApiMaxConn}}\"\n" +

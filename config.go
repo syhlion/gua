@@ -23,6 +23,10 @@ type Config struct {
 	RedisForDelayQueneDBNo    int
 	RedisForDelayQueneMaxIdle int
 	RedisForDelayQueneMaxConn int
+	RedisForGroupAddr         string
+	RedisForGroupDBNo         int
+	RedisForGroupMaxIdle      int
+	RedisForGroupMaxConn      int
 	JobReplyHook              string
 	MachineCode               string
 	StartTime                 time.Time

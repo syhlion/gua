@@ -13,6 +13,7 @@ message RemoteCommandRequest {
    string get_job_machine_host = 10;
    string get_job_machine_mac = 11;
    string get_job_machine_ip = 12;
+   string group_name = 13;
 
 
 }
@@ -23,6 +24,7 @@ message RegisterCommandRequest {
     string job_id = 1;
     string otp_token = 2;
     string otp_code =3;
+    string group_name=4;
 }
 
 message RegisterCommandReponse {

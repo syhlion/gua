@@ -45,6 +45,10 @@ func cmdInit(c *cli.Context) (conf *Config) {
 	if err != nil {
 		conf.WorkerNum = 100
 	}
+	conf.GroupName = os.Getenv("GROUP_NAME")
+	if conf.GroupName == "" {
+		logger.Fatal("empty env GROUP_NAME")
+	}
 	conf.MachineCode = os.Getenv("MACHINE_CODE")
 	if conf.MachineCode == "" {
 		logger.Fatal("empty env MACHINE_CODE")
@@ -139,6 +143,7 @@ func start(c *cli.Context) {
 			BoradcastAddr: conf.BoradcastAddr,
 			Grpclisten:    apiListener.Addr().String(),
 			MachineCode:   conf.MachineCode,
+			GroupName:     conf.GroupName,
 		}
 		nrep, err := guaClient.NodeRegister(ctx, nreq)
 		if err != nil {
@@ -176,8 +181,9 @@ func start(c *cli.Context) {
 				ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
 				code, _ := totp.GenerateCode(conf.OtpToken, time.Now())
 				req := &guaproto.Ping{
-					NodeId:  conf.NodeId,
-					OtpCode: code,
+					NodeId:    conf.NodeId,
+					OtpCode:   code,
+					GroupName: conf.GroupName,
 				}
 				_, err = guaClient.Heartbeat(ctx, req)
 				if err != nil {
@@ -204,6 +210,7 @@ func start(c *cli.Context) {
 		guaClient: guaClient,
 		otpToken:  conf.OtpToken,
 		localdb:   db,
+		config:    conf,
 	}
 	go sr.run()
 

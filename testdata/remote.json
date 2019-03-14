@@ -1,7 +1,8 @@
 {
   "name": "Hello",
+  "group_name":"YM55",
   "exec_time": 0,
-  "request_url": "REMOTE@1099600286869098496",
+  "request_url": "REMOTE@1105994041582948352@192.168.152.153@scott-rd2.local",
   "interval_pattern": "@once",
   "exec_command": "./curl.sh",
   "timeout": 10

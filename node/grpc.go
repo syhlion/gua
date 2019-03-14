@@ -151,6 +151,7 @@ func (n *Node) worker() {
 			GetJobMachineHost:  command.getJobMachineHost,
 			GetJobMachineMac:   command.getJobMachineMac,
 			GetJobMachineIp:    command.getJobMachineIp,
+			GroupName:          n.config.GroupName,
 		}
 		if r.err != nil {
 			replyRequest.Error = r.err.Error()

@@ -16,6 +16,7 @@ type Config struct {
 	OtpToken      string
 	NodeId        string
 	BoradcastAddr string
+	GroupName     string
 	StartTime     time.Time
 }
 

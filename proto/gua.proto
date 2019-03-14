@@ -16,6 +16,7 @@ message JobReplyRequest {
    string get_job_machine_mac = 13;
    string get_job_machine_ip = 14;
    string node_id = 15;
+   string group_name = 16;
 }
 message JobReplyResponse {
 }
@@ -27,13 +28,16 @@ message NodeRegisterRequest {
    string boradcast_addr = 5;
    string grpclisten = 6;
    string machine_code = 7;
+   string group_name = 8;
+   string otp_code = 9;
 }
 message NodeRegisterResponse {
    string node_id = 1;
 }
 message Ping {
     string node_id = 1;
-    string otp_code = 2;
+    string group_name = 2;
+    string otp_code = 3;
 }
 message Pong {
 }

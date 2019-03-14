@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -12,9 +11,40 @@ import (
 	"github.com/syhlion/restresp"
 )
 
+func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}
 func GetJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}
+func RegisterGroup(quene delayquene.Quene, conf *Config) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("Error reading body: %v", err)
+			restresp.Write(w, err, http.StatusBadRequest)
+			return
+		}
+		payload := &RegisterGroupPayload{}
+		err = json.Unmarshal(body, payload)
+		if err != nil {
+			log.Printf("Error json umnarsal: %v", err)
+			restresp.Write(w, err, http.StatusBadRequest)
+			return
+		}
+		otp, err := quene.RegisterGroup(payload.GroupName)
+		if err != nil {
+			log.Printf("Error json umnarsal: %v", err)
+			restresp.Write(w, err, http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, otp, http.StatusOK)
 
 	}
 }
@@ -36,7 +66,6 @@ func AddJob(quene delayquene.Quene, conf *Config) func(w http.ResponseWriter, r 
 			return
 		}
 		if payload.Name == "" {
-			fmt.Println("hihih")
 			restresp.Write(w, "payload no name", http.StatusBadRequest)
 			return
 		}
@@ -45,12 +74,15 @@ func AddJob(quene delayquene.Quene, conf *Config) func(w http.ResponseWriter, r 
 			return
 		}
 		if payload.IntervalPattern == "" {
-			fmt.Println("testest")
 			restresp.Write(w, "payload no interval_pattern", http.StatusBadRequest)
 			return
 		}
 		if payload.RequestUrl == "" {
 			restresp.Write(w, "payload no request_url", http.StatusBadRequest)
+			return
+		}
+		if payload.GroupName == "" {
+			restresp.Write(w, "payload no group_name", http.StatusBadRequest)
 			return
 		}
 		/*
@@ -59,23 +91,26 @@ func AddJob(quene delayquene.Quene, conf *Config) func(w http.ResponseWriter, r 
 				return
 			}
 		*/
-		kkey, err := totp.Generate(totp.GenerateOpts{
-			Issuer:      conf.Mac,
-			AccountName: conf.ExternalIp,
-		})
-		if err != nil {
-			restresp.Write(w, err, http.StatusBadRequest)
-			return
-		}
 		job := &guaproto.Job{
 			Name:            payload.Name,
+			GroupName:       payload.GroupName,
 			Id:              quene.GenerateUID(),
 			Exectime:        payload.Exectime,
-			OtpToken:        kkey.Secret(),
 			Timeout:         payload.Timeout,
 			IntervalPattern: payload.IntervalPattern,
 			RequestUrl:      payload.RequestUrl,
 			ExecCmd:         []byte(payload.ExecCommand),
+		}
+		if !payload.UseGroupOtp {
+			kkey, err := totp.Generate(totp.GenerateOpts{
+				Issuer:      conf.Mac,
+				AccountName: conf.ExternalIp,
+			})
+			if err != nil {
+				restresp.Write(w, "otp generate error", http.StatusBadRequest)
+				return
+			}
+			job.OtpToken = kkey.Secret()
 		}
 		err = quene.Push(job)
 		if err != nil {

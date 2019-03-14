@@ -11,11 +11,13 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/syhlion/greq"
 	"github.com/syhlion/gua/delayquene"
+	"github.com/syhlion/gua/luacore"
 	guaproto "github.com/syhlion/gua/proto"
 	requestwork "github.com/syhlion/requestwork.v2"
 	"github.com/urfave/cli"
@@ -107,9 +109,26 @@ func cmdInit(c *cli.Context) (conf *Config) {
 	if err != nil {
 		logger.Fatal("empty env REDIS_FOR_DELAY_QUENE_MAX_CONN")
 	}
+
+	conf.RedisForGroupAddr = os.Getenv("REDIS_FOR_GROUP_ADDR")
+	if conf.RedisForGroupAddr == "" {
+		logger.Fatal("empty env REDIS_FOR_GROUP_ADDR")
+	}
+	conf.RedisForGroupDBNo, err = strconv.Atoi(os.Getenv("REDIS_FOR_GROUP_DB_NO"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_GROUP_DB_NO")
+	}
+	conf.RedisForGroupMaxIdle, err = strconv.Atoi(os.Getenv("REDIS_FOR_GROUP_MAX_IDLE"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_GROUP_MAX_IDLE")
+	}
+	conf.RedisForGroupMaxConn, err = strconv.Atoi(os.Getenv("REDIS_FOR_GROUP_MAX_CONN"))
+	if err != nil {
+		logger.Fatal("empty env REDIS_FOR_GROUP_MAX_CONN")
+	}
 	conf.MachineCode = os.Getenv("MACHINE_CODE")
 	if conf.MachineCode == "" {
-		logger.Fatal("empty env REDIS_FOR_DELAY_QUENE_MAX_CONN")
+		logger.Fatal("empty env MACHINE_CODE")
 	}
 	conf.CompileDate = compileDate
 	conf.Version = version
@@ -121,6 +140,10 @@ func start(c *cli.Context) {
 
 	conf := cmdInit(c)
 	dconf := &delayquene.Config{
+		RedisForGroupAddr:         conf.RedisForGroupAddr,
+		RedisForGroupDBNo:         conf.RedisForGroupDBNo,
+		RedisForGroupMaxIdle:      conf.RedisForGroupMaxIdle,
+		RedisForGroupMaxConn:      conf.RedisForGroupMaxConn,
 		RedisForReadyAddr:         conf.RedisForReadyAddr,
 		RedisForReadyDBNo:         conf.RedisForReadyDBNo,
 		RedisForReadyMaxIdle:      conf.RedisForReadyMaxIdle,
@@ -135,6 +158,31 @@ func start(c *cli.Context) {
 		JobReplyUrl:               conf.JobReplyHook,
 		Logger:                    logger,
 	}
+	//init ready quene redis pool
+	apiRedis := redis.NewPool(func() (redis.Conn, error) {
+		c, err := redis.Dial("tcp", conf.RedisForApiAddr)
+		if err != nil {
+			return nil, err
+		}
+		_, err = c.Do("SELECT", conf.RedisForApiDBNo)
+		if err != nil {
+			c.Close()
+			return nil, err
+		}
+		return c, nil
+	}, 10)
+	apiRedis.MaxIdle = conf.RedisForApiMaxIdle
+	apiRedis.MaxActive = conf.RedisForApiMaxConn
+	apiconn := apiRedis.Get()
+	defer apiconn.Close()
+
+	// Test the connection
+	_, err := apiconn.Do("PING")
+	if err != nil {
+		logger.Fatal(err)
+		return
+	}
+	lpool := luacore.New()
 	quene, err := delayquene.New(dconf)
 	if err != nil {
 		logger.Fatal(err)
@@ -166,10 +214,12 @@ func start(c *cli.Context) {
 	grpcErr := make(chan error)
 	httpApiListener, err := net.Listen("tcp", conf.HttpListen)
 	r := mux.NewRouter()
+	r.HandleFunc("/register", RegisterGroup(quene, conf)).Methods("POST")
 	r.HandleFunc("/add", AddJob(quene, conf)).Methods("POST")
 	r.HandleFunc("/remove", RemoveJob(quene)).Methods("DELETE")
 	r.HandleFunc("/get", GetJob(quene)).Methods("GET")
 	r.HandleFunc("/edit", EditJob(quene)).Methods("POST")
+	r.HandleFunc("/luatest", LuaEntrance(apiRedis, lpool))
 	server := http.Server{
 		ReadTimeout: 3 * time.Second,
 		Handler:     r,
