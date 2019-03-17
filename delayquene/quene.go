@@ -161,14 +161,12 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 		lpool:          lpool,
 		bucket:         bucket,
 		jobQuene:       jobQuene,
+		qpool:          delayRedis,
 		rpool:          readyRedis,
 		urpool:         groupRedis,
 		worker:         worker,
 		bucketNameChan: bucketChan,
 	}
-	// delay quene
-	//go q.runForDelayQuene()
-	//go q.runForReadQuene()
 
 	return q, nil
 }
@@ -185,10 +183,13 @@ type Config struct {
 }
 
 type Quene interface {
-	GetDelayQueneRedis() (pool *redis.Pool)
 	Heartbeat(nodeId string, groupName string) (err error)
 	GenerateUID() (s string)
 	Remove(jobId string) (err error)
+	Active(groupName string, jobId string, exectime int64) (err error)
+	Pause(groupName string, jobId string) (err error)
+	Delete(groupName string, jobId string) (err error)
+	List(groupName string) (jobs []*guaproto.Job, err error)
 	Push(job *guaproto.Job) (err error)
 	RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto.NodeRegisterResponse, err error)
 	RegisterGroup(groupName string) (otpToken string, err error)
@@ -204,14 +205,12 @@ type q struct {
 	bucket         *Bucket
 	jobQuene       *JobQuene
 	rpool          *redis.Pool
+	qpool          *redis.Pool
 	urpool         *redis.Pool
 	lpool          *luacore.LStatePool
 	//httpClient     *greq.Client
 }
 
-func (t *q) GetDelayQueneRedis() (pool *redis.Pool) {
-	return t.rpool
-}
 func (t *q) GenerateUID() (s string) {
 	return t.node.Generate().String()
 }
@@ -282,6 +281,92 @@ func (t *q) RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto
 	_, err = conn.Do("SET", remoteKey, b, "EX", 86400)
 	return
 
+}
+func (t *q) Active(groupName string, jobId string, exectime int64) (err error) {
+	conn := t.qpool.Get()
+	defer conn.Close()
+	for {
+		jobKey := fmt.Sprintf(jobNamePrefix, groupName, jobId)
+		_, err := conn.Do("WATCH", jobKey)
+		if err != nil {
+			return err
+		}
+		b, err := redis.Bytes(conn.Do("GET", jobKey))
+		if err != nil {
+			return err
+		}
+		job := &guaproto.Job{}
+		err = proto.Unmarshal(b, job)
+		if err != nil {
+			return err
+		}
+		job.Active = true
+		job.Exectime = exectime
+		bb, err := proto.Marshal(job)
+		if err != nil {
+			return err
+		}
+		err = conn.Send("MULTI")
+		if err != nil {
+			return err
+		}
+		conn.Send("SET", jobKey, bb)
+		reply, err := conn.Do("EXEC")
+		if err == nil && reply != nil {
+			t.bucket.Push(<-t.bucketNameChan, exectime, fmt.Sprintf(jobNamePrefix, job.GroupName, job.Id))
+			break
+		}
+	}
+	return
+
+}
+func (t *q) Pause(groupName string, jobId string) (err error) {
+	conn := t.qpool.Get()
+	defer conn.Close()
+	for {
+		jobKey := fmt.Sprintf(jobNamePrefix, groupName, jobId)
+		_, err := conn.Do("WATCH", jobKey)
+		if err != nil {
+			fmt.Println("gg", jobKey)
+			return err
+		}
+		b, err := redis.Bytes(conn.Do("GET", jobKey))
+		if err != nil {
+			return err
+		}
+		job := &guaproto.Job{}
+		err = proto.Unmarshal(b, job)
+		if err != nil {
+			return err
+		}
+		job.Active = false
+		bb, err := proto.Marshal(job)
+		if err != nil {
+			return err
+		}
+		err = conn.Send("MULTI")
+		if err != nil {
+			return err
+		}
+		conn.Send("SET", jobKey, bb)
+		reply, err := conn.Do("EXEC")
+		if err == nil && reply != nil {
+			break
+		}
+	}
+	return
+
+}
+func (t *q) List(groupName string) (jobs []*guaproto.Job, err error) {
+	jobKey := fmt.Sprintf(jobNamePrefix, groupName, "*")
+	return t.jobQuene.List(jobKey)
+}
+func (t *q) Delete(groupName, jobId string) (err error) {
+	conn := t.qpool.Get()
+	defer conn.Close()
+	jobKey := fmt.Sprintf(jobNamePrefix, groupName, jobId)
+	_, err = conn.Do("DEL", jobKey)
+	return
 }
 func (t *q) Heartbeat(nodeId string, groupName string) (err error) {
 	conn := t.rpool.Get()

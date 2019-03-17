@@ -21,3 +21,17 @@ type AddFuncPayload struct {
 	DisableGroupOtp bool   `json:"disable_group_otp"`
 	LuaBody         string `json:"lua_body"`
 }
+
+type JobControlPayload struct {
+	GroupName string `json:"group_name"`
+	JobId     string `json:"job_id"`
+}
+type ActiveJobPayload struct {
+	GroupName string `json:"group_name"`
+	JobId     string `json:"job_id"`
+	Exectime  int64  `json:"exec_time"`
+}
+
+type GetJobsPayload struct {
+	GroupName string `json:"group_name"`
+}

@@ -3,7 +3,7 @@
   "name": "Hello",
   "exec_time": 0,
   "request_url": "HTTP@http://127.0.0.1:9999?test=yao",
-  "interval_pattern": "@once",
+  "interval_pattern": "@every 5s",
   "exec_command": "",
   "timeout": 1,
   "use_group_otp":true

@@ -10,6 +10,7 @@ message Job {
    string request_url =7;
    bytes exec_cmd = 8;
    string group_name = 9;
+   bool active=10;
 }
 
 message ReadyJob {
@@ -33,4 +34,5 @@ message Func {
   bool disable_group_otp = 4;
   string otp_token = 5;
   bytes LuaBody = 6;
+  bool active = 10;
 }

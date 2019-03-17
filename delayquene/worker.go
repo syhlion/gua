@@ -287,6 +287,11 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				return
 			}
 
+			if !job.Active {
+				t.bucket.Remove(realBucketName, bi.JobId)
+				return
+			}
+
 			if job.Exectime > ti.Unix() {
 				t.bucket.Remove(realBucketName, bi.JobId)
 				t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
@@ -336,6 +341,8 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				job.Exectime = sch.Next(time.Now()).Unix()
 				t.jobQuene.Add(bi.JobId, job)
 				t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
+			} else {
+				t.jobQuene.Remove(bi.JobId)
 			}
 		}()
 	}

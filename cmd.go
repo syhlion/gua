@@ -282,7 +282,7 @@ func start(c *cli.Context) {
 		config:     conf,
 		httpClient: client,
 		quene:      quene,
-		rpool:      quene.GetDelayQueneRedis(),
+		rpool:      delayRedis,
 	}
 
 	grpc := grpc.NewServer()
@@ -297,9 +297,11 @@ func start(c *cli.Context) {
 	r.HandleFunc("/register", RegisterGroup(quene, conf)).Methods("POST")
 	r.HandleFunc("/add", AddJob(quene, conf)).Methods("POST")
 	r.HandleFunc("/addfunc", AddFunc(group, apiRedis, lpool)).Methods("POST")
-	r.HandleFunc("/remove", RemoveJob(quene)).Methods("DELETE")
-	r.HandleFunc("/get", GetJob(quene)).Methods("GET")
-	r.HandleFunc("/edit", EditJob(quene)).Methods("POST")
+	r.HandleFunc("/delete", RemoveJob(quene)).Methods("POST")
+	r.HandleFunc("/pause", PauseJob(quene)).Methods("POST")
+	r.HandleFunc("/active", ActiveJob(quene)).Methods("POST")
+	r.HandleFunc("/jobs", GetJobList(quene)).Methods("GET")
+	//r.HandleFunc("/edit", EditJob(quene)).Methods("POST")
 	//r.HandleFunc("/luatest", LuaEntrance(apiRedis, lpool))
 	server := http.Server{
 		ReadTimeout: 3 * time.Second,

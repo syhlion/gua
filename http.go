@@ -20,20 +20,20 @@ func AddFunc(group *Group, apiRedis *redis.Pool, lpool *luacore.LStatePool) func
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			log.Printf("Error reading body: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload := &AddFuncPayload{}
 		err = json.Unmarshal(body, payload)
 		if err != nil {
 			log.Printf("Error json umnarsal: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		_, err = group.GetGroup(payload.GroupName)
 		if err != nil {
 			log.Printf("Error get group: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		funcKey := fmt.Sprintf("FUNC-%s-%s", payload.GroupName, payload.Name)
@@ -48,7 +48,7 @@ func AddFunc(group *Group, apiRedis *redis.Pool, lpool *luacore.LStatePool) func
 				})
 				if err != nil {
 					log.Printf("Error set lua: %v", err)
-					restresp.Write(w, err, http.StatusBadRequest)
+					restresp.Write(w, err.Error(), http.StatusBadRequest)
 					return
 				}
 				otpToken = kkey.Secret()
@@ -65,13 +65,13 @@ func AddFunc(group *Group, apiRedis *redis.Pool, lpool *luacore.LStatePool) func
 		b, err := proto.Marshal(f)
 		if err != nil {
 			log.Printf("Error set lua: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		_, err = c.Do("SET", funcKey, b)
 		if err != nil {
 			log.Printf("Error set lua: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if otpToken != "" {
@@ -86,12 +86,15 @@ func AddFunc(group *Group, apiRedis *redis.Pool, lpool *luacore.LStatePool) func
 func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
-
-	}
-}
-func GetJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
+		groupName := r.FormValue("group_name")
+		jobs, err := quene.List(groupName)
+		if err != nil {
+			log.Printf("jobs error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, jobs, http.StatusOK)
+		return
 
 	}
 }
@@ -172,6 +175,7 @@ func AddJob(quene delayquene.Quene, conf *Config) func(w http.ResponseWriter, r 
 			IntervalPattern: payload.IntervalPattern,
 			RequestUrl:      payload.RequestUrl,
 			ExecCmd:         []byte(payload.ExecCommand),
+			Active:          true,
 		}
 		if !payload.UseGroupOtp {
 			kkey, err := totp.Generate(totp.GenerateOpts{
@@ -198,12 +202,81 @@ func AddJob(quene delayquene.Quene, conf *Config) func(w http.ResponseWriter, r 
 func RemoveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("Error reading body: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		payload := &JobControlPayload{}
+		json.Unmarshal(body, payload)
+		if err != nil {
+			log.Printf("Error json umnarsal: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = quene.Delete(payload.GroupName, payload.JobId)
+		if err != nil {
+			log.Printf("jobs error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, "ok", http.StatusOK)
+		return
 
 	}
 }
-func EditJob(nquene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+func PauseJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("Error reading body: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		payload := &JobControlPayload{}
+		json.Unmarshal(body, payload)
+		if err != nil {
+			log.Printf("Error json umnarsal: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = quene.Pause(payload.GroupName, payload.JobId)
+		if err != nil {
+			log.Printf("jobs error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, "ok", http.StatusOK)
+		return
+
+	}
+}
+func ActiveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Printf("Error reading body: %v", err)
+			restresp.Write(w, err, http.StatusBadRequest)
+			return
+		}
+		payload := &ActiveJobPayload{}
+		err = json.Unmarshal(body, payload)
+		if err != nil {
+			log.Printf("Error json umnarsal: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = quene.Active(payload.GroupName, payload.JobId, payload.Exectime)
+		if err != nil {
+			log.Printf("jobs error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, "ok", http.StatusOK)
+		return
 
 	}
 }
