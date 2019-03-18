@@ -16,11 +16,12 @@ require (
 	github.com/gorilla/mux v1.7.0
 	github.com/joho/godotenv v1.3.0
 	github.com/josharian/impl v0.0.0-20180228163738-3d0f908298c4 // indirect
-	github.com/json-iterator/go v1.1.5
+	github.com/json-iterator/go v1.1.6
 	github.com/jstemmer/gotags v1.4.1 // indirect
 	github.com/keegancsmith/rpc v1.1.0 // indirect
 	github.com/kisielk/errcheck v1.2.0 // indirect
 	github.com/klauspost/asmfmt v1.2.0 // indirect
+	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/koron/iferr v0.0.0-20180615142939-bb332a3b1d91 // indirect
 	github.com/mdempsky/gocode v0.0.0-20190203001940-7fb65232883f // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -33,7 +34,7 @@ require (
 	github.com/stamblerre/gocode v0.0.0-20190213022308-8cc90faaf476 // indirect
 	github.com/syhlion/glua-libs v0.0.0-20190226084815-21b4efad4dcb
 	//github.com/syhlion/glua-libs v0.0.0-20190214063755-b2ecbef6038d
-	github.com/syhlion/greq v1.0.1-0.20190220063215-f65913045150
+	github.com/syhlion/greq v1.0.5
 	github.com/syhlion/requestwork.v2 v0.0.0-20180319035234-4599c250105f
 	github.com/syhlion/restresp v0.0.0-20170323032640-7fe232e5b740
 	github.com/urfave/cli v1.20.0

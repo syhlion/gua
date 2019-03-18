@@ -96,7 +96,7 @@ func LuaEntrance(group *Group, apiRedis *redis.Pool, lpool *luacore.LStatePool) 
 				return
 			}
 		default:
-			logger.Errorf("lua not func  \n", r)
+			logger.Errorf("lua not func %#v \n", r)
 			return
 		}
 
