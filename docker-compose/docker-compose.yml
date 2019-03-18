@@ -1,0 +1,22 @@
+gua-redis-for-api:
+    image: redis
+gua-redis-for-ready:
+    image: redis
+gua-redis-for-job:
+    image: redis
+gua-redis-for-group:
+    image: redis
+gua:
+    image: syhlion/gua
+    links: 
+        - gua-redis-for-api
+        - gua-redis-for-ready
+        - gua-redis-for-job
+        - gua-redis-for-group
+    command: start
+    env_file:
+        - ./docker-env.example
+    ports: 
+        - "6666:6666"
+        - "7777:7777"
+        - "8888:8888"
