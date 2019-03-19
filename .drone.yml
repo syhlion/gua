@@ -22,7 +22,6 @@ steps:
       - md5
     title: ${DRONE_TAG}
     note: CHANGELOG.md
-    draft: true
   trigger:
     event:
     - tag
