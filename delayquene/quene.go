@@ -193,7 +193,7 @@ type Quene interface {
 	Push(job *guaproto.Job) (err error)
 	RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto.NodeRegisterResponse, err error)
 	RegisterGroup(groupName string) (otpToken string, err error)
-	QueryNode(nodeId string, groupName string) (resp *guaproto.NodeRegisterRequest, err error)
+	QueryNodes(groupName string) (nodes []*guaproto.NodeRegisterRequest, err error)
 }
 
 type q struct {
@@ -239,17 +239,28 @@ func (t *q) RegisterGroup(groupName string) (otpToken string, err error) {
 
 }
 
-func (t *q) QueryNode(nodeId string, groupName string) (resp *guaproto.NodeRegisterRequest, err error) {
+func (t *q) QueryNodes(groupName string) (nodes []*guaproto.NodeRegisterRequest, err error) {
 	conn := t.urpool.Get()
 	defer conn.Close()
 
-	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", groupName, nodeId)
-	b, err := redis.Bytes(conn.Do("GET", remoteKey))
+	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_*", groupName)
+	keys, err := redis.Strings(conn.Do("KEYS", remoteKey))
 	if err != nil {
 		return
 	}
-	resp = &guaproto.NodeRegisterRequest{}
-	err = proto.Unmarshal(b, resp)
+	nodes = make([]*guaproto.NodeRegisterRequest, 0)
+	for _, v := range keys {
+		b, err := redis.Bytes(conn.Do("GET", v))
+		if err != nil {
+			continue
+		}
+		node := &guaproto.NodeRegisterRequest{}
+		err = proto.Unmarshal(b, node)
+		if err != nil {
+			continue
+		}
+		nodes = append(nodes, node)
+	}
 	return
 
 }

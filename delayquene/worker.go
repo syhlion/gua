@@ -109,17 +109,23 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 		cc := t.rpool.Get()
 		defer cc.Close()
 		nodeIds := strings.Split(nodeIdString, ",")
+		errTexts := make([]string, 0)
 		for _, nodeId := range nodeIds {
 			remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", job.GroupName, nodeId)
 			b, err := redis.Bytes(cc.Do("GET", remoteKey))
 			if err != nil {
+
 				t.logger.WithError(err).Errorf("remote nodeinfo get error. remotekey:%s. job:%#v", remoteKey, job)
+				text := fmt.Sprintf("remote nodeinfo get error. remotekey:%s. job:%#v. err:%#v", remoteKey, job, err)
+				errTexts = append(errTexts, text)
 				continue
 			}
 			nr := guaproto.NodeRegisterRequest{}
 			err = proto.Unmarshal(b, &nr)
 			if err != nil {
 				t.logger.WithError(err).Errorf("nodeinfo unmarshal error. remotekey:%s. job:%#v", remoteKey, job)
+				text := fmt.Sprintf("nodeinfo unmarshal error. remotekey:%s. job:%#v. err:%#v", remoteKey, job, err)
+				errTexts = append(errTexts, text)
 				continue
 			}
 			var addr string
@@ -133,6 +139,8 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 			conn, err := grpc.Dial(addr, grpc.WithInsecure())
 			if err != nil {
 				t.logger.WithError(err).Errorf("nodeinfo connect error. remotekey:%s. job:%#v", remoteKey, job)
+				text := fmt.Sprintf("nodeinfo connect error. remotekey:%s. job:%#v. err:%#v", remoteKey, job, err)
+				errTexts = append(errTexts, text)
 				continue
 			}
 			passcode, _ := totp.GenerateCode(job.OtpToken, time.Now())
@@ -147,8 +155,15 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 			_, err = nodeClient.RemoteCommand(ctx, cmdReq)
 			if err != nil {
 				t.logger.WithError(err).Errorf("nodeinfo exec error. remotekey:%s. job:%#v", remoteKey, job)
+				text := fmt.Sprintf("nodeinfo exec error. remotekey:%s. job:%#v. err:%#v", remoteKey, job, err)
+				errTexts = append(errTexts, text)
 				continue
 			}
+		}
+		if len(errTexts) != 0 {
+			err = errors.New(strings.Join(errTexts, ".\n"))
+			return
+
 		}
 
 	case "LUA":
