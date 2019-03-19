@@ -2,6 +2,10 @@
 
 [v1.0.0.beta3] 2019-03-19
 
+[Fix]
+
+* fix env default
+
 [Add]
 
 * add remote exec log callback
