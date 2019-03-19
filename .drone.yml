@@ -20,7 +20,7 @@ steps:
     files: build/*
     checksum:
       - md5
-    title: tag
+    title: ${DRONE_TAG}
     note: CHANGELOG.md
     draft: true
   trigger:

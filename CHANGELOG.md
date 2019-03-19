@@ -1,9 +1,11 @@
 [unrelease]
 
+[v1.0.0.beta3] 2019-03-19
+
 [Add]
 
 * add remote exec log callback
-
+* add query nodes api
 
 
 
