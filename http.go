@@ -93,7 +93,22 @@ func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Requ
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		restresp.Write(w, jobs, http.StatusOK)
+		joblist := make([]*ResponseJobList, 0)
+		for _, v := range jobs {
+			job := &ResponseJobList{
+				Name:            v.Name,
+				Id:              v.Id,
+				OtpToken:        v.OtpToken,
+				Exectime:        v.Exectime,
+				IntervalPattern: v.IntervalPattern,
+				RequestUrl:      v.RequestUrl,
+				ExecCmd:         string(v.ExecCmd),
+				GroupName:       v.GroupName,
+				Active:          v.Active,
+			}
+			joblist = append(joblist, job)
+		}
+		restresp.Write(w, joblist, http.StatusOK)
 		return
 
 	}

@@ -1,5 +1,9 @@
 [unrelease]
 
+[Fix]
+
+* fix get jobs  exec_cmd byte to string
+
 [v1.0.0.beta3] 2019-03-19
 
 [Fix]

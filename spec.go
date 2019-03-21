@@ -35,3 +35,15 @@ type ActiveJobPayload struct {
 type GetJobsPayload struct {
 	GroupName string `json:"group_name"`
 }
+
+type ResponseJobList struct {
+	Name            string `json:"name"`
+	Id              string `json:"id"`
+	Exectime        int64  `json:"exec_time"`
+	OtpToken        string `json:"otp_token"`
+	IntervalPattern string `json:"interval_pattern"`
+	RequestUrl      string `json:"request_url"`
+	ExecCmd         string `json:"exec_cmd"`
+	GroupName       string `json:"group_name"`
+	Active          bool   `json:"active"`
+}
