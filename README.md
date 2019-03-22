@@ -35,5 +35,5 @@ $ ./gua start
 
 ## Api
 
-[api](./API.md)
+[api](./api.md)
 
