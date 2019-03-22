@@ -12,6 +12,11 @@
 
 * fix get jobs  exec_cmd byte to string
 * fix get job list api for restful old: /jobs    new: /{group_name}/job/list
+* fix register api for restful old: /register    new: /register/group
+* fix add job list api for restful old: /add    new: /add/job
+* fix active job list api for restful old: /active    new: /active/job
+* fix delete job list api for restful old: /delete    new: /delete/job
+* fix pause job list api for restful old: /pause    new: /pause/job
 
 
 

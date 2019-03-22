@@ -1,9 +1,28 @@
 # Api
 
+### Register Group
 
-### Add JOb
+`POST /register/group`
 
-`POST /add`
+Body:
+
+[register_group.json](./testdata/register_group.json)
+
+```
+{
+  "group_name": "YM55",
+}
+```
+
+Example:
+
+```
+$ curl -d "@register_group.json" -X POST http://{{yourhost}}/register/group
+```
+
+### Add Job
+
+`POST /add/job`
 
 Body:
 
@@ -24,12 +43,12 @@ Body:
 Example:
 
 ```
-$ curl -d "@http.json" -X POST http://{{yourhost}}/add
+$ curl -d "@http.json" -X POST http://{{yourhost}}/add/job
 ```
 
 ### Pause Job
 
-`POST /pause`
+`POST /pause/job`
 
 Body:
 
@@ -45,13 +64,13 @@ Body:
 Example:
 
 ```
-$ curl -d "@pause.json" -X POST http://{{yourhost}}/pause
+$ curl -d "@pause.json" -X POST http://{{yourhost}}/pause/job
 ```
 
 
 ### Active Job
 
-`POST /active`
+`POST /active/job`
 
 Body:
 
@@ -69,13 +88,13 @@ Body:
 Example:
 
 ```
-$ curl -d "@active.json" -X POST http://{{yourhost}}/active
+$ curl -d "@active.json" -X POST http://{{yourhost}}/active/job
 ```
 
 
 ### Delete Job
 
-`POST /delete`
+`POST /delete/job`
 
 Body:
 
@@ -91,7 +110,7 @@ Body:
 Example:
 
 ```
-$ curl -d "@delete.json" -X POST http://{{yourhost}}/delete
+$ curl -d "@delete.json" -X POST http://{{yourhost}}/delete/job
 ```
 
 
