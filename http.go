@@ -8,6 +8,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
+	"github.com/gorilla/mux"
 	"github.com/pquerna/otp/totp"
 	"github.com/syhlion/gua/delayquene"
 	"github.com/syhlion/gua/luacore"
@@ -82,11 +83,58 @@ func AddFunc(group *Group, apiRedis *redis.Pool, lpool *luacore.LStatePool) func
 
 	}
 }
+func GetNodeList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		groupName := vars["group_name"]
+		nodes, err := quene.QueryNodes(groupName)
+		if err != nil {
+			log.Printf("get node list error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, nodes, http.StatusOK)
+		return
+
+	}
+}
+
+func GroupInfo(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		groupName := vars["group_name"]
+		group, err := quene.GroupInfo(groupName)
+		if err != nil {
+			log.Printf("group info error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, group, http.StatusOK)
+		return
+
+	}
+}
+func GetGroupList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		groups, err := quene.QueryGroups()
+		if err != nil {
+			log.Printf("get group list error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, groups, http.StatusOK)
+		return
+
+	}
+}
 func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.FormValue("group_name")
+		vars := mux.Vars(r)
+		groupName := vars["group_name"]
 		jobs, err := quene.List(groupName)
 		if err != nil {
 			log.Printf("jobs error: %v", err)

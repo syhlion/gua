@@ -106,7 +106,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 		}
 	case "REMOTE":
 		nodeIdString := ss[2]
-		cc := t.rpool.Get()
+		cc := t.urpool.Get()
 		defer cc.Close()
 		nodeIds := strings.Split(nodeIdString, ",")
 		errTexts := make([]string, 0)

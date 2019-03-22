@@ -1,8 +1,21 @@
 [unrelease]
 
+[v1.0.0.beta4] 2019-03-22
+
+[Add]
+
+* add get group list api
+* add get group info api
+* add get node list api
+
 [Fix]
 
 * fix get jobs  exec_cmd byte to string
+* fix get job list api for restful old: /jobs    new: /{group_name}/job/list
+
+
+
+
 
 [v1.0.0.beta3] 2019-03-19
 

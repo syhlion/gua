@@ -141,7 +141,7 @@ func start(c *cli.Context) {
 			Mac:           conf.Mac,
 			OtpToken:      conf.OtpToken,
 			BoradcastAddr: conf.BoradcastAddr,
-			Grpclisten:    apiListener.Addr().String(),
+			Grpclisten:    conf.GrpcListen,
 			MachineCode:   conf.MachineCode,
 			GroupName:     conf.GroupName,
 		}

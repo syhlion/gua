@@ -194,6 +194,8 @@ type Quene interface {
 	RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto.NodeRegisterResponse, err error)
 	RegisterGroup(groupName string) (otpToken string, err error)
 	QueryNodes(groupName string) (nodes []*guaproto.NodeRegisterRequest, err error)
+	QueryGroups() (s []string, err error)
+	GroupInfo(groupName string) (s string, err error)
 }
 
 type q struct {
@@ -217,6 +219,18 @@ func (t *q) GenerateUID() (s string) {
 
 func (t *q) Remove(jobId string) (err error) {
 	return t.jobQuene.Remove(jobId)
+}
+func (t *q) GroupInfo(groupName string) (s string, err error) {
+	conn := t.urpool.Get()
+	defer conn.Close()
+	groupKey := fmt.Sprintf("USER_%s", groupName)
+	return redis.String(conn.Do("GET", groupKey))
+}
+func (t *q) QueryGroups() (groups []string, err error) {
+	conn := t.urpool.Get()
+	defer conn.Close()
+	return redis.Strings(conn.Do("KEYS", "USER_*"))
+
 }
 func (t *q) RegisterGroup(groupName string) (otpToken string, err error) {
 	conn := t.urpool.Get()
@@ -265,8 +279,6 @@ func (t *q) QueryNodes(groupName string) (nodes []*guaproto.NodeRegisterRequest,
 
 }
 func (t *q) RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto.NodeRegisterResponse, err error) {
-	conn := t.rpool.Get()
-	defer conn.Close()
 
 	uconn := t.urpool.Get()
 	defer uconn.Close()
@@ -289,7 +301,7 @@ func (t *q) RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto
 		return
 	}
 	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", nodeInfo.GroupName, nodeId)
-	_, err = conn.Do("SET", remoteKey, b, "EX", 86400)
+	_, err = uconn.Do("SET", remoteKey, b, "EX", 86400)
 	return
 
 }
@@ -380,7 +392,7 @@ func (t *q) Delete(groupName, jobId string) (err error) {
 	return
 }
 func (t *q) Heartbeat(nodeId string, groupName string) (err error) {
-	conn := t.rpool.Get()
+	conn := t.urpool.Get()
 	defer conn.Close()
 	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", groupName, nodeId)
 
@@ -396,7 +408,7 @@ func (t *q) Heartbeat(nodeId string, groupName string) (err error) {
 }
 func (t *q) Push(job *guaproto.Job) (err error) {
 
-	cc := t.rpool.Get()
+	cc := t.urpool.Get()
 	defer cc.Close()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
 	cmdType := ss[1]
@@ -428,6 +440,7 @@ func (t *q) Push(job *guaproto.Job) (err error) {
 					addr = nodeInfo.Ip + ":" + ss[1]
 
 				}
+				fmt.Println(nodeInfo)
 				conn, err := grpc.Dial(addr, grpc.WithInsecure())
 				if err != nil {
 					return err

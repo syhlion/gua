@@ -83,8 +83,6 @@ func (g *Gua) JobReply(ctx context.Context, req *guaproto.JobReplyRequest) (resp
 }
 func (g *Gua) Heartbeat(ctx context.Context, req *guaproto.Ping) (resp *guaproto.Pong, err error) {
 	logger.Infof("receive node heartbeat. request:%#v", req)
-	conn := g.rpool.Get()
-	defer conn.Close()
 	err = g.quene.Heartbeat(req.NodeId, req.GroupName)
 	if err != nil {
 		return nil, err
