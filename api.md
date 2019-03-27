@@ -164,7 +164,7 @@ $ curl http://{{yourhost}}/{group_name}/v1/group/info
 
 ### Get node list
 
-`GET /v1/{group_name}/v1/node/list`
+`GET /v1/{group_name}/node/list`
 
 
 Example:
