@@ -6,6 +6,8 @@ github.com/boombuler/barcode/utils
 github.com/bwmarrin/snowflake
 # github.com/go-sql-driver/mysql v1.4.1
 github.com/go-sql-driver/mysql
+# github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
+github.com/go-telegram-bot-api/telegram-bot-api
 # github.com/gogo/protobuf v1.2.1
 github.com/gogo/protobuf/proto
 # github.com/golang/protobuf v1.3.1
@@ -36,7 +38,7 @@ github.com/pquerna/otp
 github.com/pquerna/otp/hotp
 # github.com/sirupsen/logrus v1.4.0
 github.com/sirupsen/logrus
-# github.com/syhlion/glua-libs v0.0.0-20190226084815-21b4efad4dcb
+# github.com/syhlion/glua-libs v0.0.0-20190327072233-31c21213c13d
 github.com/syhlion/glua-libs
 github.com/syhlion/glua-libs/crypto
 github.com/syhlion/glua-libs/httpclient
@@ -45,6 +47,7 @@ github.com/syhlion/glua-libs/mysql
 github.com/syhlion/glua-libs/redis
 github.com/syhlion/glua-libs/regexp
 github.com/syhlion/glua-libs/strings
+github.com/syhlion/glua-libs/telegram
 github.com/syhlion/glua-libs/time
 github.com/syhlion/glua-libs/httpclient/client
 github.com/syhlion/glua-libs/httpclient/util
@@ -54,6 +57,8 @@ github.com/syhlion/greq
 github.com/syhlion/requestwork.v2
 # github.com/syhlion/restresp v0.0.0-20170323032640-7fe232e5b740
 github.com/syhlion/restresp
+# github.com/technoweenie/multipartstreamer v1.0.1
+github.com/technoweenie/multipartstreamer
 # github.com/urfave/cli v1.20.0
 github.com/urfave/cli
 # github.com/yuin/gopher-lua v0.0.0-20190206043414-8bfc7677f583
@@ -73,7 +78,7 @@ golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/http/httpguts
 golang.org/x/net/idna
-# golang.org/x/sys v0.0.0-20190204203706-41f3e6584952
+# golang.org/x/sys v0.0.0-20190322080309-f49334f85ddc
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.0

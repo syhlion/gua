@@ -8,6 +8,7 @@ import (
 	redis "github.com/syhlion/glua-libs/redis"
 	regexp "github.com/syhlion/glua-libs/regexp"
 	strings "github.com/syhlion/glua-libs/strings"
+	telegram "github.com/syhlion/glua-libs/telegram"
 	time "github.com/syhlion/glua-libs/time"
 
 	lua "github.com/yuin/gopher-lua"
@@ -23,4 +24,5 @@ func Preload(L *lua.LState) {
 	db.Preload(L)
 	crypto.Preload(L)
 	redis.Preload(L)
+	telegram.Preload(L)
 }

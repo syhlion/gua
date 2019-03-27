@@ -17,6 +17,7 @@ go get github.com/vadv/gopher-lua-libs
 * [regexp](/regexp) regexp port
 * [strings](/strings) strings port (utf supported)
 * [redis](/redis) access to redis
+* [telegram](/telegram) send message to telegram
 
 
 ## Thanks
