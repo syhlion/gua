@@ -18,7 +18,8 @@ steps:
     files: build/*
     checksum:
         - md5
-    title: {DRONE_TAG}
+    title: ${DRONE_TAG}
     note: CHANGELOG.md
+    draft: true
   when:
     event: tag
