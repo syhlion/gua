@@ -187,7 +187,7 @@ $ wget http://{{yourhost}}/v1/dump/all
 
 ### Dump by group
 
-`GET /v1/{group_name}/v1/dump`
+`GET /v1/{group_name}/dump`
 
 
 Example:
