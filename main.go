@@ -35,6 +35,7 @@ var (
 	}
 	logger       *logrus.Logger
 	guaMsgFormat = "\ngua start at \"{{.GetStartTime}}\"\tserver ip:\"{{.ExternalIp}}\"\tversion:\"{{.Version}}\"\tcomplie at \"{{.CompileDate}}\"\n" +
+		"func_listen:\"{{.HttpFuncListen}}\"\n" +
 		"http_listen:\"{{.HttpListen}}\"\n" +
 		"grpc_listen:\"{{.GrpcListen}}\"\n" +
 		"hostname:\"{{.Hostname}}\"\n" +
