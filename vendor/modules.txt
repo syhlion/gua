@@ -8,7 +8,7 @@ github.com/bwmarrin/snowflake
 github.com/go-sql-driver/mysql
 # github.com/gogo/protobuf v1.2.1
 github.com/gogo/protobuf/proto
-# github.com/golang/protobuf v1.2.1-0.20190205222052-c823c79ea157
+# github.com/golang/protobuf v1.3.1
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/protoc-gen-go/descriptor
 github.com/golang/protobuf/ptypes
@@ -24,7 +24,7 @@ github.com/gorilla/mux
 github.com/joho/godotenv
 # github.com/json-iterator/go v1.1.6
 github.com/json-iterator/go
-# github.com/konsorten/go-windows-terminal-sequences v1.0.2
+# github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/concurrent
@@ -34,7 +34,7 @@ github.com/modern-go/reflect2
 github.com/pquerna/otp/totp
 github.com/pquerna/otp
 github.com/pquerna/otp/hotp
-# github.com/sirupsen/logrus v1.3.0
+# github.com/sirupsen/logrus v1.4.0
 github.com/sirupsen/logrus
 # github.com/syhlion/glua-libs v0.0.0-20190226084815-21b4efad4dcb
 github.com/syhlion/glua-libs
@@ -65,12 +65,12 @@ github.com/yuin/gopher-lua/pm
 go.etcd.io/bbolt
 # golang.org/x/crypto v0.0.0-20180904163835-0709b304e793
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/net v0.0.0-20190225153610-fe579d43d832
+# golang.org/x/net v0.0.0-20180826012351-8a410e7b638d
 golang.org/x/net/trace
+golang.org/x/net/context
 golang.org/x/net/internal/timeseries
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
-golang.org/x/net/context
 golang.org/x/net/http/httpguts
 golang.org/x/net/idna
 # golang.org/x/sys v0.0.0-20190204203706-41f3e6584952
@@ -81,11 +81,11 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 golang.org/x/text/transform
-# google.golang.org/appengine v1.4.0
+# google.golang.org/appengine v1.1.0
 google.golang.org/appengine/cloudsql
-# google.golang.org/genproto v0.0.0-20190219182410-082222b4a5c5
+# google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.18.0
+# google.golang.org/grpc v1.19.1
 google.golang.org/grpc
 google.golang.org/grpc/codes
 google.golang.org/grpc/reflection

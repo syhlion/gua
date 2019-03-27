@@ -1,8 +1,20 @@
-# Api
+# Api 
+
+`GET /version`
+
+Example:
+
+```
+$ curl http://{{youhost}}/version
+```
+
+
+# Api v1
+
 
 ### Register Group
 
-`POST /register/group`
+`POST /v1/register/group`
 
 Body:
 
@@ -17,12 +29,12 @@ Body:
 Example:
 
 ```
-$ curl -d "@register_group.json" -X POST http://{{yourhost}}/register/group
+$ curl -d "@register_group.json" -X POST http://{{yourhost}}/v1/register/group
 ```
 
 ### Add Job
 
-`POST /add/job`
+`POST /v1/add/job`
 
 Body:
 
@@ -43,12 +55,12 @@ Body:
 Example:
 
 ```
-$ curl -d "@http.json" -X POST http://{{yourhost}}/add/job
+$ curl -d "@http.json" -X POST http://{{yourhost}}/v1/add/job
 ```
 
 ### Pause Job
 
-`POST /pause/job`
+`POST /v1/pause/job`
 
 Body:
 
@@ -64,13 +76,13 @@ Body:
 Example:
 
 ```
-$ curl -d "@pause.json" -X POST http://{{yourhost}}/pause/job
+$ curl -d "@pause.json" -X POST http://{{yourhost}}/v1/pause/job
 ```
 
 
 ### Active Job
 
-`POST /active/job`
+`POST /v1/active/job`
 
 Body:
 
@@ -88,13 +100,13 @@ Body:
 Example:
 
 ```
-$ curl -d "@active.json" -X POST http://{{yourhost}}/active/job
+$ curl -d "@active.json" -X POST http://{{yourhost}}/v1/active/job
 ```
 
 
 ### Delete Job
 
-`POST /delete/job`
+`POST /v1/delete/job`
 
 Body:
 
@@ -110,58 +122,89 @@ Body:
 Example:
 
 ```
-$ curl -d "@delete.json" -X POST http://{{yourhost}}/delete/job
+$ curl -d "@delete.json" -X POST http://{{yourhost}}/v1/delete/job
 ```
 
 
 ### Get job list
 
-`GET /{group_name}/job/list`
+`GET /v1/{group_name}/job/list`
 
 
 Example:
 
 ```
-$ curl http://{{yourhost}}/{{your_group_name}}/job/list
+$ curl http://{{yourhost}}/{{your_group_name}}/v1/job/list
 ```
 
 
 ### Get group list
 
-`GET /group/list`
+`GET /v1/group/list`
 
 
 Example:
 
 ```
-$ curl http://{{yourhost}}/group/list
+$ curl http://{{yourhost}}/v1/group/list
 ```
 
 
 ### Get group info
 
-`GET /{group_name}/group/info`
+`GET /{group_name}/v1/group/info`
 
 
 Example:
 
 ```
-$ curl http://{{yourhost}}/{group_name}/group/info
+$ curl http://{{yourhost}}/{group_name}/v1/group/info
 ```
 
 
 ### Get node list
 
-`GET /{group_name}/node/list`
+`GET /v1/{group_name}/v1/node/list`
 
 
 Example:
 
 ```
-$ curl http://{{yourhost}}/{group_name}/node/list
+$ curl http://{{yourhost}}/{group_name}/v1/node/list
 ```
 
 
+### Dump all data
+
+`GET /v1/dump/all`
+
+
+Example:
+
+```
+$ wget http://{{yourhost}}/v1/dump/all
+```
+
+### Dump by group
+
+`GET /v1/{group_name}/v1/dump`
+
+
+Example:
+
+```
+$ wget http://{{yourhost}}/v1/{{group_name}}/dump
+```
+
+### Import data
+
+`POST /v1/import`
+
+Example:
+
+```
+$ curl --data-binary "@{{file_name}}.tar.gz" -X POST http://{{yourhost}}/import
+```
 
 
 ## cron style pattern

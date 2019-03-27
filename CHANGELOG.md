@@ -3,6 +3,21 @@
 
 
 
+[v1.0.0.beta5] 2019-03-27
+
+[Add]
+
+* add dump all data & dump by group
+* add import data
+* add global version api
+
+
+[Fix]
+
+* fix api prefix path /v1
+
+
+
 [v1.0.0.beta4] 2019-03-22
 
 [Add]

@@ -17,7 +17,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/syhlion/greq"
 	"github.com/syhlion/gua/delayquene"
+	"github.com/syhlion/gua/httpv1"
 	"github.com/syhlion/gua/luacore"
+	"github.com/syhlion/gua/migrate"
 	guaproto "github.com/syhlion/gua/proto"
 	requestwork "github.com/syhlion/requestwork.v2"
 	"github.com/urfave/cli"
@@ -271,12 +273,6 @@ func start(c *cli.Context) {
 	work := requestwork.New(100)
 	client := greq.New(work, 60*time.Second, true)
 
-	group := &Group{
-		apiRedis:   apiRedis,
-		groupRedis: groupRedis,
-		delayRedis: delayRedis,
-	}
-
 	// 註冊 grpc
 	sr := &Gua{
 		config:     conf,
@@ -284,9 +280,11 @@ func start(c *cli.Context) {
 		quene:      quene,
 		rpool:      groupRedis,
 	}
+	migrate := migrate.New(groupRedis, delayRedis, apiRedis)
 
 	grpc := grpc.NewServer()
 	guaproto.RegisterGuaServer(grpc, sr)
+	httpv1.SetLogger(logger)
 
 	reflection.Register(grpc)
 	httpErr := make(chan error)
@@ -294,18 +292,23 @@ func start(c *cli.Context) {
 	grpcErr := make(chan error)
 	httpApiListener, err := net.Listen("tcp", conf.HttpListen)
 	r := mux.NewRouter()
-	r.HandleFunc("/register/group", RegisterGroup(quene, conf)).Methods("POST")
-	r.HandleFunc("/add/job", AddJob(quene, conf)).Methods("POST")
-	r.HandleFunc("/add/func", AddFunc(group, apiRedis, lpool)).Methods("POST")
-	r.HandleFunc("/delete/job", RemoveJob(quene)).Methods("POST")
-	r.HandleFunc("/pause/job", PauseJob(quene)).Methods("POST")
-	r.HandleFunc("/active/job", ActiveJob(quene)).Methods("POST")
-	r.HandleFunc("/{group_name}/job/list", GetJobList(quene)).Methods("GET")
-	r.HandleFunc("/group/list", GetGroupList(quene)).Methods("GET")
-	r.HandleFunc("/{group_name}/group/info", GroupInfo(quene)).Methods("GET")
-	r.HandleFunc("/{group_name}/node/list", GetNodeList(quene)).Methods("GET")
-	//r.HandleFunc("/edit", EditJob(quene)).Methods("POST")
-	//r.HandleFunc("/luatest", LuaEntrance(apiRedis, lpool))
+	r.HandleFunc("/version", Version(version)).Methods("GET")
+	subRouter := r.PathPrefix("/v1/").Subrouter()
+	subRouter.HandleFunc("/register/group", httpv1.RegisterGroup(quene)).Methods("POST")
+	subRouter.HandleFunc("/add/job", httpv1.AddJob(quene)).Methods("POST")
+	subRouter.HandleFunc("/add/func", httpv1.AddFunc(quene, apiRedis, lpool)).Methods("POST")
+	subRouter.HandleFunc("/delete/job", httpv1.RemoveJob(quene)).Methods("POST")
+	subRouter.HandleFunc("/pause/job", httpv1.PauseJob(quene)).Methods("POST")
+	subRouter.HandleFunc("/active/job", httpv1.ActiveJob(quene)).Methods("POST")
+	subRouter.HandleFunc("/group/list", httpv1.GetGroupList(quene)).Methods("GET")
+
+	subRouter.HandleFunc("/{group_name}/job/list", httpv1.GetJobList(quene)).Methods("GET")
+	subRouter.HandleFunc("/{group_name}/group/info", httpv1.GroupInfo(quene)).Methods("GET")
+	subRouter.HandleFunc("/{group_name}/node/list", httpv1.GetNodeList(quene)).Methods("GET")
+	subRouter.HandleFunc("/{group_name}/dump", httpv1.DumpBy(migrate)).Methods("GET")
+
+	subRouter.HandleFunc("/dump/all", httpv1.DumpAll(migrate)).Methods("GET")
+	subRouter.HandleFunc("/import", httpv1.Import(migrate)).Methods("POST")
 	server := http.Server{
 		ReadTimeout: 3 * time.Second,
 		Handler:     r,
@@ -316,7 +319,7 @@ func start(c *cli.Context) {
 
 	httpFuncListener, err := net.Listen("tcp", conf.HttpFuncListen)
 	rFunc := mux.NewRouter()
-	rFunc.HandleFunc("/{group_name}/{func_name}", LuaEntrance(group, apiRedis, lpool))
+	rFunc.HandleFunc("/{group_name}/{func_name}", LuaEntrance(quene, apiRedis, lpool))
 	serverFunc := http.Server{
 		ReadTimeout: 3 * time.Second,
 		Handler:     rFunc,

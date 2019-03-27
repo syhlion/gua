@@ -12,6 +12,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
 	"github.com/pquerna/otp/totp"
+	"github.com/syhlion/gua/delayquene"
 	"github.com/syhlion/gua/luacore"
 	"github.com/syhlion/gua/luaweb"
 	guaproto "github.com/syhlion/gua/proto"
@@ -19,7 +20,7 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-func LuaEntrance(group *Group, apiRedis *redis.Pool, lpool *luacore.LStatePool) func(w http.ResponseWriter, r *http.Request) {
+func LuaEntrance(quene delayquene.Quene, apiRedis *redis.Pool, lpool *luacore.LStatePool) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -32,7 +33,7 @@ func LuaEntrance(group *Group, apiRedis *redis.Pool, lpool *luacore.LStatePool) 
 			restresp.Write(w, err, http.StatusBadRequest)
 			return
 		}
-		groupOtp, err := group.GetGroup(groupName)
+		groupOtp, err := quene.GroupInfo(groupName)
 		if err != nil {
 			log.Printf("Error no group: %v", err)
 			restresp.Write(w, err, http.StatusBadRequest)
