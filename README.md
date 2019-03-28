@@ -1,5 +1,7 @@
 # gua
 
+[![Build Status](https://drone.syhlion.tw/api/badges/syhlion/gua/status.svg)](https://drone.syhlion.tw/syhlion/gua)
+
 Support crontab style Schedule System  implement by golang
 
 ## Changelog

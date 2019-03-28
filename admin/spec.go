@@ -16,8 +16,8 @@ type Payload struct {
 	GetJobMachineMac   string `json:"get_job_machine_mac"`
 	GetJobMachineIp    string `json:"get_job_machine_ip"`
 	ExecMachineHost    string `json:"exec_machine_host"`
-	RemoteNodeMac      string `json:"exec_machine_mac"`
-	RemoteNodeIp       string `json:"exec_machine_ip"`
-	RemoteNodeHost     string `json:"exec_machine_host"`
+	RemoteNodeMac      string `json:"remote_node_mac"`
+	RemoteNodeIp       string `json:"remote_node_ip"`
+	RemoteNodeHost     string `json:"remote_node_host"`
 	GroupName          string `json:"group_name"`
 }
