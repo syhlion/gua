@@ -33,7 +33,36 @@ $ ./gua start
 
 
 
+
+## Time Trigger Architecture
+
+
+![time-trigger-architecture](./other/gua-arch2-timetrigger.png)
+
+
+## Api Trigger Architecture
+
+
+![time-trigger-architecture](./other/gua-arch2-apitrigger.png)
+
+
+
+
 ## Api
 
-[api](./api.md)
+
+
+### admin api
+
+[api v1](./apiv1.md)
+
+
+## How to use time trigger for lua mode?
+
+[lua mode doc](./luamode.md)
+
+
+## How to use api trigger
+
+[api trigger](./funclua.md)
 

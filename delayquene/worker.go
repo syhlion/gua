@@ -184,7 +184,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 				Fn:      r,
 				NRet:    1,
 				Protect: true,
-			}, lua.LNumber(job.PlanTime), lua.LNumber(execTime), lua.LString(job.Id))
+			}, lua.LString(job.Id), lua.LString(job.GroupName), lua.LNumber(job.PlanTime), lua.LNumber(execTime))
 
 			t.lpool.Put(l)
 			if err != nil {

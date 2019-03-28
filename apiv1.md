@@ -174,6 +174,33 @@ $ curl http://{{yourhost}}/{group_name}/v1/node/list
 ```
 
 
+### Add Func
+
+`POST /v1/add/func`
+
+Body:
+
+[http.json](./testdata/addfunc.json)
+
+```
+{
+  "group_name": "YM55",
+  "name": "Hello",
+  "use_otp": false,
+  "disable_group_otp": false,
+  "lua_body": "function HelloWorld()\n     local json = require(\"json\")\n     local redis = require(\"redis\")\n     local conn,err = redis.open(\"127.0.0.1:6379\",0)\n     local reply,err = conn:exec(\"GET\",{\"YM\"})\n     if err then error(err) end\n\n     local table = {\n         [\"method\"]=method(),\n         [\"headers\"]=headers(),\n         [\"YM\"]=tonumber(reply)\n     }\n     local result,err = json.encode(table)\n     if err then error(err) end\n     print(result)\nend"
+}
+```
+
+Example:
+
+```
+$ curl -d "@addfunc.json" -X POST http://{{yourhost}}/v1/add/func
+```
+
+> You can request "http://{{yourhost}}:{{your HTTP_FUNC_LISTEN}}/YM55/Hello" 
+
+
 ### Dump all data
 
 `GET /v1/dump/all`

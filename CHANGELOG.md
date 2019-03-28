@@ -1,6 +1,11 @@
 [unrelease]
 
 
+[Fix]
+
+* time trigger lua param add groupname
+
+
 [Add]
 
 * lua add telegram api
