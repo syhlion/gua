@@ -11,6 +11,8 @@ RUN git clone https://github.com/syhlion/gua.git /go/src/gua &&\
 # final stage
 FROM scratch
 COPY --from=builder /go/src/gua/build/gua /
+EXPOSE 8888 7777 6666
+
 ENTRYPOINT ["./gua"]
 
 
