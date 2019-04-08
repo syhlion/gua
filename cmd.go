@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -311,7 +312,7 @@ func start(c *cli.Context) {
 	subRouter.HandleFunc("/import", httpv1.Import(migrate)).Methods("POST")
 	server := http.Server{
 		ReadTimeout: 3 * time.Second,
-		Handler:     r,
+		Handler:     handlers.CORS()(r),
 	}
 	go func() {
 		httpErr <- server.Serve(httpApiListener)
@@ -322,7 +323,7 @@ func start(c *cli.Context) {
 	rFunc.HandleFunc("/{group_name}/{func_name}", LuaEntrance(quene, apiRedis, lpool))
 	serverFunc := http.Server{
 		ReadTimeout: 3 * time.Second,
-		Handler:     rFunc,
+		Handler:     handlers.CORS()(rFunc),
 	}
 	go func() {
 		httpFuncErr <- serverFunc.Serve(httpFuncListener)

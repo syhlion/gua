@@ -4,10 +4,12 @@
 [Add]
 
 * Add License
+* Add mux handler CORS 
 
 [Fix]
 
 * time trigger lua param add groupname
+* use mulit build stage for docker
 
 
 [Add]
