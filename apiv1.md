@@ -134,7 +134,7 @@ $ curl -d "@delete.json" -X POST http://{{yourhost}}/v1/delete/job
 Example:
 
 ```
-$ curl http://{{yourhost}}/{{your_group_name}}/v1/job/list
+$ curl http://{{yourhost}}/v1/{{your_group_name}}/job/list
 ```
 
 

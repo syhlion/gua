@@ -10,6 +10,7 @@
 
 * time trigger lua param add groupname
 * use mulit build stage for docker
+* fix api md
 
 
 [Add]
