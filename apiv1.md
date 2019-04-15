@@ -48,7 +48,8 @@ Body:
   "request_url": "HTTP@http://127.0.0.1:9999?test=yao", //prefix REMOTE|LUA|HTTP
   "interval_pattern": "@once", //use crontab schema or @once or @every 5s
   "exec_command": "",
-  "timeout": 1
+  "timeout": 1,
+  "memo":""
 }
 ```
 
@@ -188,7 +189,8 @@ Body:
   "name": "Hello",
   "use_otp": false,
   "disable_group_otp": false,
-  "lua_body": "function HelloWorld()\n     local json = require(\"json\")\n     local redis = require(\"redis\")\n     local conn,err = redis.open(\"127.0.0.1:6379\",0)\n     local reply,err = conn:exec(\"GET\",{\"YM\"})\n     if err then error(err) end\n\n     local table = {\n         [\"method\"]=method(),\n         [\"headers\"]=headers(),\n         [\"YM\"]=tonumber(reply)\n     }\n     local result,err = json.encode(table)\n     if err then error(err) end\n     print(result)\nend"
+  "lua_body": "function HelloWorld()\n     local json = require(\"json\")\n     local redis = require(\"redis\")\n     local conn,err = redis.open(\"127.0.0.1:6379\",0)\n     local reply,err = conn:exec(\"GET\",{\"YM\"})\n     if err then error(err) end\n\n     local table = {\n         [\"method\"]=method(),\n         [\"headers\"]=headers(),\n         [\"YM\"]=tonumber(reply)\n     }\n     local result,err = json.encode(table)\n     if err then error(err) end\n     print(result)\nend",
+  "momo":"",
 }
 ```
 

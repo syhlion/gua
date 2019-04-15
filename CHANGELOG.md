@@ -1,16 +1,20 @@
 [unrelease]
 
 
+
 [Add]
 
 * Add License
 * Add mux handler CORS 
+* Add job & func filed memo
 
 [Fix]
 
 * time trigger lua param add groupname
 * use mulit build stage for docker
 * fix api md
+* fix admin namepsace to loghook namespace
+* vendor remake
 
 
 [Add]

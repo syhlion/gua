@@ -9,8 +9,8 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/pquerna/otp/totp"
 	"github.com/syhlion/greq"
-	"github.com/syhlion/gua/admin"
 	"github.com/syhlion/gua/delayquene"
+	"github.com/syhlion/gua/loghook"
 	guaproto "github.com/syhlion/gua/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -49,7 +49,7 @@ func (g *Gua) JobReply(ctx context.Context, req *guaproto.JobReplyRequest) (resp
 		return nil, status.Error(codes.PermissionDenied, "otp error")
 	}
 	if g.config.JobReplyHook != "" {
-		payload := &admin.Payload{
+		payload := &loghook.Payload{
 			ExecTime:           req.ExecTime,
 			FinishTime:         req.FinishTime,
 			PlanTime:           req.PlanTime,

@@ -5,5 +5,6 @@
   "request_url": "REMOTE@1110710592697536512@192.168.152.153@scott-rd2.local",
   "interval_pattern": "@every 5s",
   "exec_command": "./curl.sh",
-  "timeout": 10
+  "timeout": 10,
+  "memo":"hello"
 }

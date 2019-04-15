@@ -79,6 +79,7 @@ func AddFunc(quene delayquene.Quene, apiRedis *redis.Pool, lpool *luacore.LState
 			GroupName:       payload.GroupName,
 			UseOtp:          payload.UseOtp,
 			DisableGroupOtp: payload.DisableGroupOtp,
+			Memo:            payload.Memo,
 			OtpToken:        otpToken,
 			LuaBody:         []byte(payload.LuaBody),
 		}
@@ -234,6 +235,7 @@ func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Requ
 				ExecCmd:         string(v.ExecCmd),
 				GroupName:       v.GroupName,
 				Active:          v.Active,
+				Memo:            v.Memo,
 			}
 			joblist = append(joblist, job)
 		}
@@ -314,6 +316,7 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 			RequestUrl:      payload.RequestUrl,
 			ExecCmd:         []byte(payload.ExecCommand),
 			Active:          true,
+			Memo:            payload.Memo,
 		}
 		if !payload.UseGroupOtp {
 			kkey, err := totp.Generate(totp.GenerateOpts{

@@ -11,6 +11,7 @@ message Job {
    bytes exec_cmd = 8;
    string group_name = 9;
    bool active=10;
+   string memo=11;
 }
 
 message ReadyJob {
@@ -34,5 +35,6 @@ message Func {
   bool disable_group_otp = 4;
   string otp_token = 5;
   bytes LuaBody = 6;
-  bool active = 10;
+  bool active = 7;
+  string memo = 8;
 }

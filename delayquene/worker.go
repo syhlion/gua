@@ -16,7 +16,7 @@ import (
 	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"
 	"github.com/syhlion/greq"
-	"github.com/syhlion/gua/admin"
+	"github.com/syhlion/gua/loghook"
 	"github.com/syhlion/gua/luacore"
 	guaproto "github.com/syhlion/gua/proto"
 	lua "github.com/yuin/gopher-lua"
@@ -53,7 +53,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 		//如沒設定 reply hook 不執行
 		if t.jobReplyUrl != "" {
 
-			payload := &admin.Payload{
+			payload := &loghook.Payload{
 				ExecTime:           execTime,
 				FinishTime:         finishTime,
 				PlanTime:           job.PlanTime,

@@ -5,5 +5,6 @@
   "request_url": "LUA@",
   "interval_pattern": "@once",
   "exec_command": "function Hello()\nlocal http = require(\"httpclient\")\nlocal client = http.client()\n\n-- GET\nlocal request = http.request(\"GET\", \"http://127.0.0.1:9999\")\nlocal result, err = client:do_request(request)\nif err then error(err) end\nif not(result.code == 200) then error(\"code\") end\nprint(result.body)\nend",
-  "timeout": 1
+  "timeout": 1,
+  "memo":"hello"
 }

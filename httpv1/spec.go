@@ -9,6 +9,7 @@ type AddJobPayload struct {
 	ExecCommand     string `json:"exec_command"`
 	Timeout         int64  `json:"timeout"`
 	UseGroupOtp     bool   `json:"use_group_otp"`
+	Memo            string `json:"memo"`
 }
 type RegisterGroupPayload struct {
 	GroupName string `json:"group_name"`
@@ -20,6 +21,7 @@ type AddFuncPayload struct {
 	UseOtp          bool   `json:"use_otp"`
 	DisableGroupOtp bool   `json:"disable_group_otp"`
 	LuaBody         string `json:"lua_body"`
+	Memo            string `sjon:"memo"`
 }
 
 type JobControlPayload struct {
@@ -46,4 +48,5 @@ type ResponseJobList struct {
 	ExecCmd         string `json:"exec_cmd"`
 	GroupName       string `json:"group_name"`
 	Active          bool   `json:"active"`
+	Memo            string `json:"memo"`
 }

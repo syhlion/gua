@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/boombuler/barcode v1.0.0 // indirect
-	github.com/bwmarrin/snowflake v0.0.0-20180412010544-68117e6bbede
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.1
 	github.com/gomodule/redigo v2.0.0+incompatible
@@ -18,10 +18,9 @@ require (
 	github.com/sirupsen/logrus v1.4.1
 	github.com/syhlion/glua-libs v0.0.0-20190327072233-31c21213c13d
 	github.com/syhlion/greq v1.0.5
-	github.com/syhlion/requestwork.v2 v0.0.0-20180319035234-4599c250105f
+	github.com/syhlion/requestwork.v2 v0.0.0-20190410041842-6518d0ae2154
 	github.com/syhlion/restresp v0.0.0-20170323032640-7fe232e5b740
 	github.com/urfave/cli v1.20.0
 	github.com/yuin/gopher-lua v0.0.0-20190206043414-8bfc7677f583
-	go.etcd.io/bbolt v1.3.2
-	google.golang.org/grpc v1.19.1
+	google.golang.org/grpc v1.20.0
 )

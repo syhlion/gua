@@ -3,5 +3,6 @@
   "name": "HelloWorld",
   "use_otp": false,
   "disable_group_otp": false,
-  "lua_body": "function HelloWorld()\n     local json = require(\"json\")\n     local redis = require(\"redis\")\n     local conn,err = redis.open(\"127.0.0.1:6379\",0)\n     local reply,err = conn:exec(\"GET\",{\"YM\"})\n     if err then error(err) end\n\n     local table = {\n         [\"method\"]=method(),\n         [\"headers\"]=headers(),\n         [\"YM\"]=tonumber(reply)\n     }\n     local result,err = json.encode(table)\n     if err then error(err) end\n     print(result)\nend"
+  "lua_body": "function HelloWorld()\n     local json = require(\"json\")\n     local redis = require(\"redis\")\n     local conn,err = redis.open(\"127.0.0.1:6379\",0)\n     local reply,err = conn:exec(\"GET\",{\"YM\"})\n     if err then error(err) end\n\n     local table = {\n         [\"method\"]=method(),\n         [\"headers\"]=headers(),\n         [\"YM\"]=tonumber(reply)\n     }\n     local result,err = json.encode(table)\n     if err then error(err) end\n     print(result)\nend",
+  "memo":"hello"
 }
