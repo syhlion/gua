@@ -20,7 +20,6 @@ build/linux:
 dockerbuild/linux: 
 	go test
 	$(call dockerbuildgua,linux,amd64,)
-	cp env.example build/ &&  cp node/env.example build/node/ && cp -R testdata build/
 build/linux_amd64.tar.gz: build/linux
 	$(call tar,linux,amd64,)
 build/darwin: 
