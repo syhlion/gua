@@ -6,7 +6,7 @@ ENV GO111MODULE=on
 RUN apk add --update gcc g++
 RUN git clone https://github.com/syhlion/gua.git &&\
     cd gua &&\
-    make build/linux
+    make dockerbuild/linux
 
 # final stage
 FROM scratch
