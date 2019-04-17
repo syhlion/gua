@@ -22,5 +22,6 @@ require (
 	github.com/syhlion/restresp v0.0.0-20170323032640-7fe232e5b740
 	github.com/urfave/cli v1.20.0
 	github.com/yuin/gopher-lua v0.0.0-20190206043414-8bfc7677f583
+	go.etcd.io/bbolt v1.3.2
 	google.golang.org/grpc v1.20.0
 )
