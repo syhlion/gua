@@ -6,11 +6,12 @@ RUN apk add --update gcc g++
 RUN git clone https://github.com/syhlion/gua.git /go/src/gua &&\
     cd /go/src/gua && \
     make build/linux
-
+WORKDIR /go/src/gua/build
 
 # final stage
 FROM scratch
-COPY --from=builder /go/src/gua/build/gua /
+WORKDIR /app
+COPY --from=builder /go/src/gua/build/gua /gua/
 EXPOSE 8888 7777 6666
 
 ENTRYPOINT ["./gua"]
