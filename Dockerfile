@@ -11,7 +11,7 @@ WORKDIR /go/src/gua/build
 # final stage
 FROM scratch
 WORKDIR /gua
-COPY --from=builder ./gua /gua/
+COPY --from=builder /go/src/gua/build/gua .
 EXPOSE 8888 7777 6666
 
 ENTRYPOINT ["./gua"]
