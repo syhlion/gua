@@ -1,5 +1,5 @@
 # build stage
-FROM golang:1.12.2-alpine3.9 AS builder
+FROM golang:1.12.4-alpine3.9 AS builder
 WORKDIR /app
 RUN apk update && apk add git && apk add make
 ENV GO111MODULE=on
