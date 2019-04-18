@@ -7,6 +7,17 @@ steps:
   commands:
   - go build
 
+- name: docker
+  image: plugins/docker
+  settings:
+    repo: syhlion/gua
+    auto_tag: true
+    purge: true
+    username: 
+        from_secret: docker_account
+    password: 
+        from_secret: docker_password
+
 - name: build
   image: golang
   commands:
