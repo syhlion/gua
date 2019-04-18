@@ -3,7 +3,7 @@ stages:
   - test
   - deploy
 build:
-  image: golang:1.11.2
+  image: golang:1.12.1
   stage: build
   script:
     - export GO111MODULE=on 
@@ -11,7 +11,7 @@ build:
     - cd $GOPATH/src/gua
     - make build/linux
 build:linux:
-  image: golang:1.11.2
+  image: golang:1.12.1
   stage: build
   script:
     - export GO111MODULE=on
@@ -26,7 +26,7 @@ build:linux:
   only:
   - tags
 build:darwin:
-  image: golang:1.11.2
+  image: golang:1.12.1
   stage: build
   script:
     - export GO111MODULE=on
