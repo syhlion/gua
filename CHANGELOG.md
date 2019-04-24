@@ -1,6 +1,11 @@
 [unrelease]
 
+[Fix]
 
+* gua grcp remote to gua-node forget close connection
+
+
+[v1.0.0-rc1]
 
 [Add]
 

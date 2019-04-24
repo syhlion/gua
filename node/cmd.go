@@ -132,6 +132,7 @@ func start(c *cli.Context) {
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
+	defer conn.Close()
 	guaClient := guaproto.NewGuaClient(conn)
 	if conf.NodeId == "" {
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
