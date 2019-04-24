@@ -48,6 +48,8 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 	c := pool.Get()
 
 	defer func() {
+		//先做第一次時間更新
+		c.Do("SET", s, time.Now().Unix())
 		//解鎖
 		c.Do("DEL", "STARTLOCK")
 		c.Close()

@@ -1,8 +1,11 @@
 [unrelease]
 
+[v1.0.0-rc2]
+
 [Fix]
 
 * gua grcp remote to gua-node forget close connection
+* init lock bug
 
 
 [v1.0.0-rc1]
