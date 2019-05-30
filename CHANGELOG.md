@@ -1,5 +1,16 @@
 [unrelease]
 
+[v1.0.0-rc3]
+
+[Fix]
+
+* gua-node provide fault tolerance (300s)
+
+[Add]
+
+* gua add edit api (only edit request_url & exec_cmd)
+
+
 [v1.0.0-rc2]
 
 [Fix]

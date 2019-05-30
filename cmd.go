@@ -301,6 +301,7 @@ func start(c *cli.Context) {
 	subRouter.HandleFunc("/delete/job", httpv1.RemoveJob(quene)).Methods("POST")
 	subRouter.HandleFunc("/pause/job", httpv1.PauseJob(quene)).Methods("POST")
 	subRouter.HandleFunc("/active/job", httpv1.ActiveJob(quene)).Methods("POST")
+	subRouter.HandleFunc("/edit/job", httpv1.EditJob(quene)).Methods("POST")
 	subRouter.HandleFunc("/group/list", httpv1.GetGroupList(quene)).Methods("GET")
 
 	subRouter.HandleFunc("/{group_name}/job/list", httpv1.GetJobList(quene)).Methods("GET")

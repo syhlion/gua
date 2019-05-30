@@ -1,5 +1,11 @@
 package httpv1
 
+type EditJobPayload struct {
+	GroupName  string `json:"group_name"`
+	Id         string `json:"id"`
+	RequestUrl string `json:"request_url"`
+	ExecCmd    string `json:"exec_cmd"`
+}
 type AddJobPayload struct {
 	GroupName       string `json:"group_name"`
 	Name            string `json:"name"`

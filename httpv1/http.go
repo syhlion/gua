@@ -269,6 +269,50 @@ func RegisterGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 
 	}
 }
+func EditJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			logger.Warnf("Error reading body: %v", err)
+			restresp.Write(w, err, http.StatusBadRequest)
+			return
+		}
+
+		payload := &EditJobPayload{}
+		err = json.Unmarshal(body, payload)
+		if err != nil {
+			logger.Warnf("Error json umnarsal: %v", err)
+			restresp.Write(w, err, http.StatusBadRequest)
+			return
+		}
+		if payload.GroupName == "" {
+			restresp.Write(w, "payload no group_name", http.StatusBadRequest)
+			return
+		}
+		if payload.Id == "" {
+			restresp.Write(w, "payload no job id ", http.StatusBadRequest)
+			return
+		}
+		if payload.RequestUrl == "" {
+			restresp.Write(w, "payload no request_url", http.StatusBadRequest)
+			return
+		}
+		if payload.ExecCmd == "" {
+			restresp.Write(w, "payload no ExecCmd", http.StatusBadRequest)
+			return
+		}
+		err = quene.Edit(payload.GroupName, payload.Id, payload.RequestUrl, payload.ExecCmd)
+		if err != nil {
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		//nodeId := strconv.FormatInt(node.id, 10)
+		restresp.Write(w, payload.Id, http.StatusOK)
+		//w.Write([]byte(nodeId))
+	}
+}
 func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {

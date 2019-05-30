@@ -188,6 +188,7 @@ type Quene interface {
 	Heartbeat(nodeId string, groupName string) (err error)
 	GenerateUID() (s string)
 	Remove(jobId string) (err error)
+	Edit(groupName, jobId, requestUrl, execCmd string) (err error)
 	Active(groupName string, jobId string, exectime int64) (err error)
 	Pause(groupName string, jobId string) (err error)
 	Delete(groupName string, jobId string) (err error)
@@ -306,6 +307,87 @@ func (t *q) RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto
 	_, err = uconn.Do("SET", remoteKey, b, "EX", 86400)
 	return
 
+}
+func (t *q) Edit(groupName, Id, requestUrl, execCmd string) (err error) {
+	job, err := t.jobQuene.Get(fmt.Sprintf(jobNamePrefix, groupName, Id))
+	if err != nil {
+		return
+	}
+	job.RequestUrl = requestUrl
+	job.ExecCmd = []byte(execCmd)
+	cc := t.urpool.Get()
+	defer cc.Close()
+	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
+	cmdType := ss[1]
+	switch cmdType {
+	case "HTTP":
+	case "REMOTE":
+		err = func() (err error) {
+			nodeIdString := ss[2]
+			nodeIds := strings.Split(nodeIdString, ",")
+			for _, nodeId := range nodeIds {
+
+				remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", job.GroupName, nodeId)
+				b, err := redis.Bytes(cc.Do("GET", remoteKey))
+				if err != nil {
+					t.config.Logger.Warnf("NO REMOTE NODE:%s\n", err)
+					return errors.New("NO REMOTE NODE")
+				}
+
+				nodeInfo := guaproto.NodeRegisterRequest{}
+				err = proto.Unmarshal(b, &nodeInfo)
+				if err != nil {
+					return err
+				}
+				var addr string
+				if nodeInfo.BoradcastAddr != "" {
+					addr = nodeInfo.BoradcastAddr
+				} else {
+					ss := strings.Split(nodeInfo.Grpclisten, ":")
+					addr = nodeInfo.Ip + ":" + ss[1]
+
+				}
+				fmt.Println(nodeInfo)
+				conn, err := grpc.Dial(addr, grpc.WithInsecure())
+				if err != nil {
+					return err
+				}
+				defer conn.Close()
+				passcode, _ := totp.GenerateCode(nodeInfo.OtpToken, time.Now())
+				nodeClient := guaproto.NewGuaNodeClient(conn)
+				ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+
+				cmdReq := &guaproto.RegisterCommandRequest{
+					JobId:    job.Id,
+					OtpToken: job.OtpToken,
+					OtpCode:  passcode,
+				}
+				_, err = nodeClient.RegisterCommand(ctx, cmdReq)
+				if err != nil {
+					return err
+				}
+			}
+			return
+		}()
+		if err != nil {
+			return
+		}
+	case "LUA":
+		reader := bytes.NewReader(job.ExecCmd)
+		_, err = parse.Parse(reader, "<string>")
+		if err != nil {
+			return
+		}
+
+	default:
+		err = errors.New("type error")
+		return
+	}
+	err = t.jobQuene.Add(fmt.Sprintf(jobNamePrefix, job.GroupName, job.Id), job)
+	if err != nil {
+		return
+	}
+	return
 }
 func (t *q) Active(groupName string, jobId string, exectime int64) (err error) {
 	conn := t.qpool.Get()

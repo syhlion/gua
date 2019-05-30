@@ -176,6 +176,7 @@ func start(c *cli.Context) {
 			}
 		}()
 		t := time.NewTicker(5 * time.Second)
+		errCounter := 0
 		for {
 			select {
 			case <-t.C:
@@ -188,8 +189,14 @@ func start(c *cli.Context) {
 				}
 				_, err = guaClient.Heartbeat(ctx, req)
 				if err != nil {
-					heartbeatErr <- err
-					return
+					logger.Error(err)
+					//錯誤累積大於300次 node panic
+					if errCounter > 300 {
+						heartbeatErr <- err
+						return
+					}
+					errCounter++
+					continue
 				}
 
 			}

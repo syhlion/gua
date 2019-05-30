@@ -53,11 +53,22 @@ Body:
 }
 ```
 
-Example:
+### Edit Job
+
+`POST /v1/edit/job`
+
+Body:
 
 ```
-$ curl -d "@http.json" -X POST http://{{yourhost}}/v1/add/job
+{
+  "group_name": "YM55",
+  "job_id" :"1107521665400573952",
+  "request_url": "HTTP@http://127.0.0.1:9999?test=yao", //prefix REMOTE|LUA|HTTP
+  "exec_command": ""
+}
 ```
+
+
 
 ### Pause Job
 
