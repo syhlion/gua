@@ -333,6 +333,48 @@ func start(c *cli.Context) {
 	go func() {
 		grpcErr <- grpc.Serve(apiListener)
 	}()
+
+	errRedisHeartbeat := make(chan error)
+	go func() {
+		t := time.NewTicker(1 * time.Second)
+		for {
+			select {
+			case <-t.C:
+				err := func() (err error) {
+					apiConn := apiRedis.Get()
+					_, err = apiConn.Do("PING")
+					if err != nil {
+						return
+					}
+					defer apiConn.Close()
+					delayConn := delayRedis.Get()
+					_, err = delayConn.Do("PING")
+					if err != nil {
+						return
+					}
+					defer delayConn.Close()
+					readyConn := readyRedis.Get()
+					_, err = readyConn.Do("PING")
+					if err != nil {
+						return
+					}
+					defer readyConn.Close()
+					groupConn := groupRedis.Get()
+					_, err = groupConn.Do("PING")
+					if err != nil {
+						return
+					}
+					defer groupConn.Close()
+					return
+				}()
+				if err != nil {
+					errRedisHeartbeat <- err
+					return
+				}
+			}
+		}
+	}()
+
 	shutdow_observer := make(chan os.Signal, 1)
 	t := template.Must(template.New("gua start msg").Parse(guaMsgFormat))
 	t.Execute(os.Stdout, conf)
@@ -345,6 +387,8 @@ func start(c *cli.Context) {
 	case err := <-httpFuncErr:
 		logger.Error(err)
 	case err := <-httpErr:
+		logger.Error(err)
+	case err := <-errRedisHeartbeat:
 		logger.Error(err)
 	}
 	return

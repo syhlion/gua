@@ -1,5 +1,12 @@
 [unrelease]
 
+[v1.0.0-rc4]
+
+[Add]
+
+* redis heartbeat 1 op/second
+
+
 [v1.0.0-rc3]
 
 [Fix]
