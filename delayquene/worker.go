@@ -207,34 +207,36 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	return
 }
 func (t *Worker) ReadyQueneWorker() {
-	c := t.rpool.Get()
-	defer c.Close()
-	var queneName string
-	var data []byte
 	for {
+		func() {
+			c := t.rpool.Get()
+			defer c.Close()
+			var queneName string
+			var data []byte
 
-		//這邊會block住 等收訊息
-		reply, err := redis.Values(c.Do("BLPOP", "GUA-READY-JOB", 0))
-		if err != nil {
-			//有可能因為timeout error  重新取一再跑一次迴圈
-			t.logger.WithError(err).Errorf("redis receive fail")
-			continue
-		}
-		if _, err := redis.Scan(reply, &queneName, &data); err != nil {
-			t.logger.WithError(err).Errorf("redis scan fail")
-			continue
-		}
-		job := &guaproto.ReadyJob{}
-		err = proto.Unmarshal(data, job)
-		if err != nil {
-			t.logger.WithError(err).Errorf("proto unmarshal error")
-			continue
-		}
-		err = t.ExecuteJob(job)
-		if err != nil {
-			t.logger.WithError(err).Errorf("exec job error")
-			continue
-		}
+			//這邊會block住 等收訊息
+			reply, err := redis.Values(c.Do("BLPOP", "GUA-READY-JOB", 0))
+			if err != nil {
+				//有可能因為timeout error  重新取一再跑一次迴圈
+				t.logger.WithError(err).Errorf("redis receive fail")
+				return
+			}
+			if _, err := redis.Scan(reply, &queneName, &data); err != nil {
+				t.logger.WithError(err).Errorf("redis scan fail")
+				return
+			}
+			job := &guaproto.ReadyJob{}
+			err = proto.Unmarshal(data, job)
+			if err != nil {
+				t.logger.WithError(err).Errorf("proto unmarshal error")
+				return
+			}
+			err = t.ExecuteJob(job)
+			if err != nil {
+				t.logger.WithError(err).Errorf("exec job error")
+				return
+			}
+		}()
 
 	}
 
