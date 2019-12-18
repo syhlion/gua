@@ -1,5 +1,12 @@
 [unrelease]
 
+[v1.0.0-rc5]
+
+[fix]
+
+* fix redis disconnect
+
+
 [v1.0.0-rc4]
 
 [Add]
