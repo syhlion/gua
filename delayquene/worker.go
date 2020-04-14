@@ -385,7 +385,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			t.bucket.Remove(realBucketName, bi.JobId)
 			if job.IntervalPattern != "@once" {
 				sch, _ := Parse(job.IntervalPattern)
-				job.Exectime = sch.Next(time.Now()).Unix()
+				job.Exectime = sch.Next(ti).Unix()
 				t.jobQuene.Add(bi.JobId, job)
 				t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
 			} else {
