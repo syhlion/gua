@@ -39,6 +39,7 @@ func cmdInit(c *cli.Context) (conf *Config) {
 			logger.Fatal(err)
 		}
 	}
+	logger.SetFormatter(&logrus.JSONFormatter{})
 	conf = &Config{}
 
 	conf.GrpcListen = os.Getenv("GRPC_LISTEN")
@@ -147,20 +148,29 @@ func start(c *cli.Context) {
 
 	conf := cmdInit(c)
 	//init ready quene redis pool
-	apiRedis := redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", conf.RedisForApiAddr)
-		if err != nil {
-			return nil, err
-		}
-		_, err = c.Do("SELECT", conf.RedisForApiDBNo)
-		if err != nil {
-			c.Close()
-			return nil, err
-		}
-		return c, nil
-	}, 10)
-	apiRedis.MaxIdle = conf.RedisForApiMaxIdle
-	apiRedis.MaxActive = conf.RedisForApiMaxConn
+	apiRedis := &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", conf.RedisForApiAddr)
+			if err != nil {
+				return nil, err
+			}
+			_, err = c.Do("SELECT", conf.RedisForApiDBNo)
+			if err != nil {
+				c.Close()
+				return nil, err
+			}
+			return c, nil
+		},
+		MaxIdle:   conf.RedisForApiMaxIdle,
+		MaxActive: conf.RedisForApiMaxConn,
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			if time.Since(t) < time.Minute {
+				return nil
+			}
+			_, err := c.Do("PING")
+			return err
+		},
+	}
 	func() (err error) {
 		apiconn := apiRedis.Get()
 		defer apiconn.Close()
@@ -173,20 +183,29 @@ func start(c *cli.Context) {
 		}
 		return
 	}()
-	groupRedis := redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", conf.RedisForGroupAddr)
-		if err != nil {
-			return nil, err
-		}
-		_, err = c.Do("SELECT", conf.RedisForGroupDBNo)
-		if err != nil {
-			c.Close()
-			return nil, err
-		}
-		return c, nil
-	}, 10)
-	groupRedis.MaxIdle = conf.RedisForGroupMaxIdle
-	groupRedis.MaxActive = conf.RedisForGroupMaxConn
+	groupRedis := &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", conf.RedisForGroupAddr)
+			if err != nil {
+				return nil, err
+			}
+			_, err = c.Do("SELECT", conf.RedisForGroupDBNo)
+			if err != nil {
+				c.Close()
+				return nil, err
+			}
+			return c, nil
+		},
+		MaxIdle:   conf.RedisForGroupMaxIdle,
+		MaxActive: conf.RedisForGroupMaxConn,
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			if time.Since(t) < time.Minute {
+				return nil
+			}
+			_, err := c.Do("PING")
+			return err
+		},
+	}
 	func() (err error) {
 		groupconn := groupRedis.Get()
 		defer groupconn.Close()
@@ -199,20 +218,29 @@ func start(c *cli.Context) {
 		}
 		return
 	}()
-	delayRedis := redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", conf.RedisForDelayQueneAddr)
-		if err != nil {
-			return nil, err
-		}
-		_, err = c.Do("SELECT", conf.RedisForDelayQueneDBNo)
-		if err != nil {
-			c.Close()
-			return nil, err
-		}
-		return c, nil
-	}, 10)
-	delayRedis.MaxIdle = conf.RedisForDelayQueneMaxIdle
-	delayRedis.MaxActive = conf.RedisForDelayQueneMaxConn
+	delayRedis := &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", conf.RedisForDelayQueneAddr)
+			if err != nil {
+				return nil, err
+			}
+			_, err = c.Do("SELECT", conf.RedisForDelayQueneDBNo)
+			if err != nil {
+				c.Close()
+				return nil, err
+			}
+			return c, nil
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			if time.Since(t) < time.Minute {
+				return nil
+			}
+			_, err := c.Do("PING")
+			return err
+		},
+		MaxIdle:   conf.RedisForDelayQueneMaxIdle,
+		MaxActive: conf.RedisForDelayQueneMaxConn,
+	}
 	func() (err error) {
 		delayconn := delayRedis.Get()
 		defer delayconn.Close()
@@ -225,20 +253,29 @@ func start(c *cli.Context) {
 		}
 		return
 	}()
-	readyRedis := redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", conf.RedisForReadyAddr)
-		if err != nil {
-			return nil, err
-		}
-		_, err = c.Do("SELECT", conf.RedisForReadyDBNo)
-		if err != nil {
-			c.Close()
-			return nil, err
-		}
-		return c, nil
-	}, 10)
-	readyRedis.MaxIdle = conf.RedisForReadyMaxIdle
-	readyRedis.MaxActive = conf.RedisForReadyMaxConn
+	readyRedis := &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", conf.RedisForReadyAddr)
+			if err != nil {
+				return nil, err
+			}
+			_, err = c.Do("SELECT", conf.RedisForReadyDBNo)
+			if err != nil {
+				c.Close()
+				return nil, err
+			}
+			return c, nil
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			if time.Since(t) < time.Minute {
+				return nil
+			}
+			_, err := c.Do("PING")
+			return err
+		},
+		MaxIdle:   conf.RedisForReadyMaxIdle,
+		MaxActive: conf.RedisForReadyMaxConn,
+	}
 	func() (err error) {
 		readyconn := readyRedis.Get()
 		defer readyconn.Close()
@@ -391,5 +428,6 @@ func start(c *cli.Context) {
 	case err := <-errRedisHeartbeat:
 		logger.Error(err)
 	}
+	quene.Close()
 	return
 }

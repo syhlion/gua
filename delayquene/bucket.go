@@ -2,6 +2,7 @@ package delayquene
 
 import (
 	"github.com/gomodule/redigo/redis"
+	"github.com/sirupsen/logrus"
 )
 
 type BucketItem struct {
@@ -10,7 +11,8 @@ type BucketItem struct {
 }
 
 type Bucket struct {
-	rpool *redis.Pool
+	rpool  *redis.Pool
+	logger *logrus.Logger
 }
 
 func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
@@ -21,7 +23,23 @@ func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
 }
 func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 	c := b.rpool.Get()
-	defer c.Close()
+	defer func() {
+		downBucket, err := redis.String(c.Do("LPOP", "down-server"))
+		if err != nil {
+			c.Close()
+			return
+		}
+		b.logger.Infof("GET New Server:%s Merge to %s Start", downBucket, key)
+		_, err = c.Do("ZUNIONSTORE", key, 2, key, downBucket, "WEIGHTS", 1, 1, "AGGREGATE", "MIN")
+		if err != nil {
+			c.Close()
+			return
+		}
+		c.Do("DEL", downBucket)
+		c.Close()
+		b.logger.Infof("GET New Server:%s Merge to %s Finish", downBucket, key)
+	}()
+
 	reply, err := redis.Values(c.Do("ZRANGE", key, 0, 30, "WITHSCORES"))
 	if err != nil {
 		return

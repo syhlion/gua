@@ -28,6 +28,7 @@ type Worker struct {
 	//ready quene
 	rpool *redis.Pool
 	//group pool
+	realServerName string
 	urpool         *redis.Pool
 	jobReplyUrl    string
 	machineHost    string
@@ -42,6 +43,8 @@ type Worker struct {
 	bucket         *Bucket
 	jobQuene       *JobQuene
 	bucketNameChan <-chan string
+	closeSign      []chan int
+	wait           sync.WaitGroup
 }
 
 func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
@@ -241,6 +244,16 @@ func (t *Worker) ReadyQueneWorker() {
 	}
 
 }
+func (t *Worker) Close() {
+	for _, v := range t.closeSign {
+		v <- 1
+		close(v)
+	}
+	conn := t.bucket.rpool.Get()
+	conn.Do("DEL", t.realServerName)
+	conn.Close()
+	t.wait.Wait()
+}
 func (t *Worker) RunForReadQuene() {
 	t.once1.Do(func() {
 		for i := 0; i < bucketSize; i++ {
@@ -250,11 +263,20 @@ func (t *Worker) RunForReadQuene() {
 	})
 }
 
-func (t *Worker) DelayQueneWorker(timer *time.Ticker, realBucketName string) {
+func (t *Worker) DelayQueneWorker(timer *time.Ticker, closeSign chan int, realBucketName string) {
+	defer func() {
+		conn := t.bucket.rpool.Get()
+		_, err := conn.Do("LPUSH", "down-server", realBucketName)
+		t.logger.Debugf("down-server:%s,err:%s", realBucketName, err)
+		t.wait.Done()
+	}()
 	for {
 		select {
 		case tt := <-timer.C:
 			t.DelayQueneHandler(tt, realBucketName)
+		case <-closeSign:
+			t.logger.Infof("down bucket:%s", realBucketName)
+			return
 
 		}
 	}
@@ -280,8 +302,10 @@ func (t *Worker) RunForDelayQuene() {
 	t.once2.Do(func() {
 		for i := 0; i < bucketSize; i++ {
 			t.timers[i] = time.NewTicker(1 * time.Second)
+			t.closeSign[i] = make(chan int, 0)
 			realBucketName := fmt.Sprintf(t.bucketName, i+1)
-			go t.DelayQueneWorker(t.timers[i], realBucketName)
+			t.wait.Add(1)
+			go t.DelayQueneWorker(t.timers[i], t.closeSign[i], realBucketName)
 		}
 	})
 }

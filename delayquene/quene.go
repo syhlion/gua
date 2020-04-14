@@ -28,7 +28,7 @@ import (
 const bucketSize = 30
 
 // bucket-{uuid}-{[0-9]}
-var bucketNamePrefix = "BUCKET-[%s]"
+var bucketNamePrefix = "BUCKET-[%s-%s]"
 
 // JOB-{groupName}-{jobId}
 var jobNamePrefix = "JOB-%s-%s"
@@ -123,8 +123,37 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 			}
 		}
 	}()
+
+	conn := delayRedis.Get()
+	ks, err := redis.Strings(conn.Do("keys", name+"-*"))
+	if err != nil {
+		conn.Close()
+		return
+	}
+	if len(ks) > 0 {
+		fmt.Println("HHHH")
+		for _, v := range ks {
+			kkeys := fmt.Sprintf("BUCKET-\\[%s\\]", v)
+			kks, err := redis.Strings(conn.Do("keys", kkeys+"-*"))
+			if err != nil {
+				return nil, err
+			}
+			for _, vv := range kks {
+				fmt.Println(vv)
+				_, err := conn.Do("LPUSH", "down-server", vv)
+				if err != nil {
+					conn.Close()
+					return nil, err
+				}
+			}
+			conn.Do("DEL", v)
+		}
+	}
+	conn.Close()
+
 	bucket := &Bucket{
-		rpool: delayRedis,
+		rpool:  delayRedis,
+		logger: config.Logger,
 	}
 	jobQuene := &JobQuene{
 		rpool: delayRedis,
@@ -135,21 +164,32 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 	}
 	work := requestwork.New(100)
 	client := greq.New(work, 60*time.Second, true)
+	tt := time.Now().UnixNano()
+	ts := strconv.FormatInt(tt, 10)
+	conn = delayRedis.Get()
+	_, err = conn.Do("SET", name+"-"+ts, tt)
+	if err != nil {
+		conn.Close()
+		return
+	}
+	conn.Close()
 	worker := &Worker{
-		bucketName:  fmt.Sprintf(bucketNamePrefix, name) + "-%d",
-		timers:      make([]*time.Ticker, bucketSize),
-		rpool:       readyRedis,
-		urpool:      groupRedis,
-		once1:       &sync.Once{},
-		once2:       &sync.Once{},
-		httpClient:  client,
-		bucket:      bucket,
-		jobQuene:    jobQuene,
-		jobReplyUrl: config.JobReplyUrl,
-		machineHost: config.MachineHost,
-		machineMac:  config.MachineMac,
-		machineIp:   config.MachineIp,
-		logger:      config.Logger,
+		bucketName:     fmt.Sprintf(bucketNamePrefix, name, ts) + "-%d",
+		realServerName: name + "-" + ts,
+		timers:         make([]*time.Ticker, bucketSize),
+		rpool:          readyRedis,
+		urpool:         groupRedis,
+		once1:          &sync.Once{},
+		once2:          &sync.Once{},
+		httpClient:     client,
+		bucket:         bucket,
+		jobQuene:       jobQuene,
+		jobReplyUrl:    config.JobReplyUrl,
+		machineHost:    config.MachineHost,
+		machineMac:     config.MachineMac,
+		machineIp:      config.MachineIp,
+		logger:         config.Logger,
+		closeSign:      make([]chan int, bucketSize),
 	}
 	bucketChan := worker.GenerateBucketName()
 	worker.bucketNameChan = bucketChan
@@ -199,6 +239,7 @@ type Quene interface {
 	QueryNodes(groupName string) (nodes []*guaproto.NodeRegisterRequest, err error)
 	QueryGroups() (s []string, err error)
 	GroupInfo(groupName string) (s string, err error)
+	Close()
 }
 
 type q struct {
@@ -214,6 +255,10 @@ type q struct {
 	urpool         *redis.Pool
 	lpool          *luacore.LStatePool
 	//httpClient     *greq.Client
+}
+
+func (t *q) Close() {
+	t.worker.Close()
 }
 
 func (t *q) GenerateUID() (s string) {
