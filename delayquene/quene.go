@@ -131,7 +131,6 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 		return
 	}
 	if len(ks) > 0 {
-		fmt.Println("HHHH")
 		for _, v := range ks {
 			kkeys := fmt.Sprintf("BUCKET-\\[%s\\]", v)
 			kks, err := redis.Strings(conn.Do("keys", kkeys+"-*"))
@@ -139,7 +138,6 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 				return nil, err
 			}
 			for _, vv := range kks {
-				fmt.Println(vv)
 				_, err := conn.Do("LPUSH", "down-server", vv)
 				if err != nil {
 					conn.Close()
