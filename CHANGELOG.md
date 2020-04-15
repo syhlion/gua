@@ -1,5 +1,12 @@
 [unrelease]
 
+[v1.0.0-rc6]
+
+[fix]
+
+* fix delpy func
+* fix time start
+
 [v1.0.0-rc5]
 
 [fix]
