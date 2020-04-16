@@ -161,8 +161,9 @@ func start(c *cli.Context) {
 			}
 			return c, nil
 		},
-		MaxIdle:   conf.RedisForApiMaxIdle,
-		MaxActive: conf.RedisForApiMaxConn,
+		MaxIdle:     conf.RedisForApiMaxIdle,
+		MaxActive:   conf.RedisForApiMaxConn,
+		IdleTimeout: 240 * time.Second,
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
 			if time.Since(t) < time.Minute {
 				return nil
@@ -196,8 +197,9 @@ func start(c *cli.Context) {
 			}
 			return c, nil
 		},
-		MaxIdle:   conf.RedisForGroupMaxIdle,
-		MaxActive: conf.RedisForGroupMaxConn,
+		MaxIdle:     conf.RedisForGroupMaxIdle,
+		MaxActive:   conf.RedisForGroupMaxConn,
+		IdleTimeout: 240 * time.Second,
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
 			if time.Since(t) < time.Minute {
 				return nil
@@ -238,8 +240,9 @@ func start(c *cli.Context) {
 			_, err := c.Do("PING")
 			return err
 		},
-		MaxIdle:   conf.RedisForDelayQueneMaxIdle,
-		MaxActive: conf.RedisForDelayQueneMaxConn,
+		MaxIdle:     conf.RedisForDelayQueneMaxIdle,
+		MaxActive:   conf.RedisForDelayQueneMaxConn,
+		IdleTimeout: 240 * time.Second,
 	}
 	func() (err error) {
 		delayconn := delayRedis.Get()
@@ -273,8 +276,9 @@ func start(c *cli.Context) {
 			_, err := c.Do("PING")
 			return err
 		},
-		MaxIdle:   conf.RedisForReadyMaxIdle,
-		MaxActive: conf.RedisForReadyMaxConn,
+		IdleTimeout: 240 * time.Second,
+		MaxIdle:     conf.RedisForReadyMaxIdle,
+		MaxActive:   conf.RedisForReadyMaxConn,
 	}
 	func() (err error) {
 		readyconn := readyRedis.Get()

@@ -221,7 +221,7 @@ func (t *Worker) ReadyQueneWorker() {
 			reply, err := redis.Values(c.Do("BLPOP", "GUA-READY-JOB", 0))
 			if err != nil {
 				//有可能因為timeout error  重新取一再跑一次迴圈
-				t.logger.WithError(err).Errorf("redis receive fail")
+				t.logger.WithError(err).Errorf("ready quenen redis receive fail")
 				return
 			}
 			if _, err := redis.Scan(reply, &queneName, &data); err != nil {
