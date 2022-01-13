@@ -7,7 +7,7 @@ origin code: https://github.com/vadv/gopher-lua-libs/tree/master/db
 ```lua
 local db = require("db")
 
-local mysql, err = db.open("127.0.0.1", "root:1234@(localhost:3307)/pitaya_game?charset=utf8&parseTime=True&loc=Local")
+local mysql, err = db.open("mysql", "root:1234@(localhost:3307)/pitaya_game?charset=utf8&parseTime=True&loc=Local")
 if err then error(err) end
 
 

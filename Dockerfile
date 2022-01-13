@@ -1,20 +1,15 @@
 # build stage
-FROM golang:1.12.4-alpine3.9 AS builder
-WORKDIR /app
-RUN apk update && apk add git && apk add make
+FROM golang:1.16.6-alpine3.14 AS builder
+LABEL stage=gua-intermediate
 ENV GO111MODULE=on
+RUN apk update && apk add git && apk add make
 RUN apk add --update gcc g++
-RUN git clone https://github.com/syhlion/gua.git &&\
-    cd gua &&\
-    make dockerbuild/linux
+ADD ./ /go/src/gua
+RUN cd /go/src/gua && go build -mod vendor
 
 # final stage
-FROM scratch
-WORKDIR /gua/
-COPY --from=builder /app/gua/build/gua .
+FROM alpine:3.15.0
+COPY --from=builder /go/src/gua/gua ./
 EXPOSE 8888 7777 6666
 
 ENTRYPOINT ["./gua"]
-
-
-
