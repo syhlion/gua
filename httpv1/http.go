@@ -249,20 +249,20 @@ func RegisterGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			logger.Warnf("Error reading body: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload := &RegisterGroupPayload{}
 		err = json.Unmarshal(body, payload)
 		if err != nil {
 			logger.Warnf("Error json umnarsal: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		otp, err := quene.RegisterGroup(payload.GroupName)
 		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			logger.Warnf("RegisterGroup Error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		restresp.Write(w, otp, http.StatusOK)
@@ -275,7 +275,7 @@ func EditJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			logger.Warnf("Error reading body: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -283,7 +283,7 @@ func EditJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request
 		err = json.Unmarshal(body, payload)
 		if err != nil {
 			logger.Warnf("Error json umnarsal: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if payload.GroupName == "" {
@@ -319,7 +319,7 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			logger.Warnf("Error reading body: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -327,7 +327,7 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 		err = json.Unmarshal(body, payload)
 		if err != nil {
 			logger.Warnf("Error json umnarsal: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if payload.Name == "" {
@@ -444,7 +444,7 @@ func ActiveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reque
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			logger.Warnf("Error reading body: %v", err)
-			restresp.Write(w, err, http.StatusBadRequest)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload := &ActiveJobPayload{}
