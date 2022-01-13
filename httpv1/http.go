@@ -26,8 +26,8 @@ var (
 	logger *logrus.Logger
 )
 
-func SetLogger(logger *logrus.Logger) {
-	logger = logger
+func SetLogger(l *logrus.Logger) {
+	logger = l
 }
 
 func Version(serverVersion string) func(w http.ResponseWriter, r *http.Request) {
