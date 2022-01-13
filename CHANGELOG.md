@@ -1,5 +1,13 @@
 [unrelease]
 
+
+[v1.0.0]
+
+[fix]
+
+* fix http respone
+* fix logger panic
+
 [v1.0.0-rc6]
 
 [fix]
