@@ -1,5 +1,10 @@
 [unrelease]
 
+[v1.1.0]
+
+[add]
+
+* add GroupJobClear api
 
 [v1.0.0]
 

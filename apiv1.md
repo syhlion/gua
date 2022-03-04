@@ -213,6 +213,10 @@ $ curl -d "@addfunc.json" -X POST http://{{yourhost}}/v1/add/func
 
 > You can request "http://{{yourhost}}:{{your HTTP_FUNC_LISTEN}}/YM55/Hello" 
 
+### clear job by group
+
+`DELETE /{group_name}/job/clear`
+
 
 ### Dump all data
 
