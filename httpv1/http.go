@@ -465,3 +465,28 @@ func ActiveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reque
 
 	}
 }
+
+func GroupJobClear(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		groupName := vars["group_name"]
+		jobs, err := quene.List(groupName)
+		if err != nil {
+			logger.Warnf("list jobs error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		for _, v := range jobs {
+			err = quene.Delete(groupName, v.Id)
+			if err != nil {
+				logger.Warnf("delete jobs error: %v", err)
+				restresp.Write(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+
+		restresp.Write(w, "ok", http.StatusOK)
+		return
+	}
+}
