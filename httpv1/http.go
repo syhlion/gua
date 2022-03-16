@@ -490,3 +490,31 @@ func GroupJobClear(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 		return
 	}
 }
+
+func RemoveJobsByJobName(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		groupName := vars["group_name"]
+		removeJobName := vars["job_name"]
+		allJobs, err := quene.List(groupName)
+		if err != nil {
+			logger.Warnf("RemoveJobsByJobName - list jobs error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		for _, v := range allJobs {
+			if removeJobName == v.Name {
+				err = quene.Delete(groupName, v.Id)
+				if err != nil {
+					logger.Warnf("RemoveJobsByJobName delete job error: %v", err)
+					restresp.Write(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+			}
+		}
+
+		restresp.Write(w, "ok", http.StatusOK)
+		return
+	}
+}
