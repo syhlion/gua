@@ -1,5 +1,9 @@
 [unrelease]
 
+[v1.2.0]
+
+* add delete jobs by group and job name
+
 [v1.1.0]
 
 [add]
