@@ -350,6 +350,7 @@ func start(c *cli.Context) {
 	subRouter.HandleFunc("/{group_name}/node/list", httpv1.GetNodeList(quene)).Methods("GET")
 	subRouter.HandleFunc("/{group_name}/dump", httpv1.DumpBy(migrate)).Methods("GET")
 	subRouter.HandleFunc("/{group_name}/job/clear", httpv1.GroupJobClear(quene)).Methods(http.MethodDelete)
+	subRouter.HandleFunc("/{group_name}/job/delete/{job_name}", httpv1.RemoveJobsByJobName(quene)).Methods(http.MethodDelete)
 
 	subRouter.HandleFunc("/dump/all", httpv1.DumpAll(migrate)).Methods("GET")
 	subRouter.HandleFunc("/import", httpv1.Import(migrate)).Methods("POST")

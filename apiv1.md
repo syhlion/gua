@@ -223,6 +223,17 @@ Example:
 curl --request DELETE 'http://{{yourhost}}/v1/{{your_group_name}}/job/clear'
 ```
 
+### delete jobs by group and job name
+
+`DELETE /v1/{group_name}/job/delete/{job_name}`
+
+Example:
+
+``` curl
+curl --request DELETE 'http://{{yourhost}}/v1/{{your_group_name}}/job/delete/{{job_name}}'
+```
+
+
 ### Dump all data
 
 `GET /v1/dump/all`
