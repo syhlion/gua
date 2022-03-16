@@ -215,8 +215,13 @@ $ curl -d "@addfunc.json" -X POST http://{{yourhost}}/v1/add/func
 
 ### clear job by group
 
-`DELETE /{group_name}/job/clear`
+`DELETE /v1/{group_name}/job/clear`
 
+Example:
+
+```
+curl --request DELETE 'http://{{yourhost}}/v1/{{your_group_name}}/job/clear'
+```
 
 ### Dump all data
 
