@@ -238,6 +238,7 @@ type Quene interface {
 	QueryGroups() (s []string, err error)
 	GroupInfo(groupName string) (s string, err error)
 	Close()
+	RemoveGroup(groupName string) (err error)
 }
 
 type q struct {
@@ -609,4 +610,13 @@ func (t *q) Push(job *guaproto.Job) (err error) {
 	}
 
 	return t.bucket.Push(<-t.bucketNameChan, job.Exectime, fmt.Sprintf(jobNamePrefix, job.GroupName, job.Id))
+}
+
+func (t *q) RemoveGroup(groupName string) (err error) {
+	conn := t.urpool.Get()
+	defer conn.Close()
+
+	groupKey := fmt.Sprintf("USER_%s", groupName)
+	_, err = conn.Do("DEL", groupKey)
+	return
 }
