@@ -1,5 +1,9 @@
 [unrelease]
 
+[v1.3.0]
+
+* add remote group api
+
 [v1.2.0]
 
 * add delete jobs by group and job name
