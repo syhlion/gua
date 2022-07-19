@@ -32,6 +32,27 @@ Example:
 $ curl -d "@register_group.json" -X POST http://{{yourhost}}/v1/register/group
 ```
 
+### Remove Group
+
+`POST /v1/remove/group`
+
+Body:
+
+[remove_group.json](./testdata/remove_group.json)
+
+```
+{
+  "group_name": "YM55",
+}
+```
+
+Example:
+
+```
+$ curl -d "@remove_group.json" -X POST http://{{yourhost}}/v1/remove/group
+```
+
+
 ### Add Job
 
 `POST /v1/add/job`

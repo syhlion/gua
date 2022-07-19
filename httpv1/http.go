@@ -518,3 +518,31 @@ func RemoveJobsByJobName(quene delayquene.Quene) func(w http.ResponseWriter, r *
 		return
 	}
 }
+
+func RemoveGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// clear this group all job first
+		GroupJobClear(quene)
+
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			logger.Warnf("RemoveGroup Error reading body: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		payload := &RegisterGroupPayload{}
+		err = json.Unmarshal(body, payload)
+		if err != nil {
+			logger.Warnf("RemoveGroup Error json umnarsal: %v", err)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		removeGroupErr := quene.RemoveGroup(payload.GroupName)
+		if removeGroupErr != nil {
+			logger.Warnf("RemoveGroup Error: %v", removeGroupErr)
+			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		restresp.Write(w, "ok", http.StatusOK)
+	}
+}

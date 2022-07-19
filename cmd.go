@@ -337,6 +337,7 @@ func start(c *cli.Context) {
 	r.HandleFunc("/version", Version(version)).Methods("GET")
 	subRouter := r.PathPrefix("/v1/").Subrouter()
 	subRouter.HandleFunc("/register/group", httpv1.RegisterGroup(quene)).Methods("POST")
+	subRouter.HandleFunc("/remove/group", httpv1.RemoveGroup(quene)).Methods("POST")
 	subRouter.HandleFunc("/add/job", httpv1.AddJob(quene)).Methods("POST")
 	subRouter.HandleFunc("/add/func", httpv1.AddFunc(quene, apiRedis, lpool)).Methods("POST")
 	subRouter.HandleFunc("/delete/job", httpv1.RemoveJob(quene)).Methods("POST")
