@@ -49,7 +49,7 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 
 	defer func() {
 		//先做第一次時間更新
-		c.Do("SET", s, time.Now().Unix())
+		c.Do("SET", s, time.Now().UnixNano())
 		//解鎖
 		c.Do("DEL", "STARTLOCK")
 		c.Close()
@@ -67,23 +67,20 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	replys, err := redis.Values(c.Do("keys", "SERVER-*"))
+	replys, err := redis.Strings(c.Do("keys", "SERVER-*"))
 	if err != nil {
 
 		if err == redis.ErrNil {
 			return incrServerNum(c)
 		}
 	}
-	for _, v := range replys {
-		serverName, err := redis.String(v, nil)
-		if err != nil {
-			return 0, "", err
-		}
+	for _, serverName := range replys {
 		lastTime, err := redis.Int64(c.Do("GET", serverName))
 		if err != nil {
 			return 0, "", err
 		}
-		if now.Unix()-lastTime > 2 {
+		tlastTime := time.Unix(0, lastTime)
+		if now.Sub(tlastTime) > 2*time.Second {
 			ss := re.FindStringSubmatch(serverName)
 			if len(ss) != 2 {
 				return 0, "", errors.New("server name match error")
