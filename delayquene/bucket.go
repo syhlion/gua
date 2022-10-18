@@ -1,6 +1,8 @@
 package delayquene
 
 import (
+	"time"
+
 	"github.com/gomodule/redigo/redis"
 	"github.com/sirupsen/logrus"
 )
@@ -19,6 +21,33 @@ func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
 	c := b.rpool.Get()
 	defer c.Close()
 	_, err = c.Do("ZADD", key, timestamp, jobId)
+	return
+}
+func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
+	c := b.rpool.Get()
+	defer c.Close()
+	replys, err := redis.Strings(c.Do("KEYS", "JOB-*-*-scan"))
+	if err != nil {
+		return err
+	}
+	for _, v := range replys {
+		lastTime, err := redis.Int64(c.Do("GET", v))
+		if err != nil {
+			return err
+		}
+		ss := jobCheckRe.FindStringSubmatch(v)
+
+		tlastTime := time.Unix(lastTime, 0)
+		if now.Sub(tlastTime) > 2*time.Minute {
+			err = b.Push("JOB"+"-"+"ss[1]"+"-"+"ss[2]", 0, ss[2])
+			if err != nil {
+				return err
+			}
+			b.logger.Error("job miss auto patch job ", "JOB"+"-"+ss[1]+"-"+ss[2])
+
+		}
+
+	}
 	return
 }
 func (b *Bucket) Get(key string) (items []*BucketItem, err error) {

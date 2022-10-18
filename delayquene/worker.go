@@ -39,6 +39,8 @@ type Worker struct {
 	bucketName     string
 	once1          *sync.Once
 	once2          *sync.Once
+	once3          *sync.Once
+
 	timers         []*time.Ticker
 	bucket         *Bucket
 	jobQuene       *JobQuene
@@ -297,7 +299,19 @@ func (t *Worker) GenerateBucketName() <-chan string {
 
 	return c
 }
+func (t *Worker) RunJobCheck() {
+	t.once3.Do(func() {
+		timer := time.NewTicker(5 * time.Second)
+		for {
+			select {
+			case tt := <-timer.C:
+				t.bucket.JobCheck(<-t.bucketNameChan, tt)
+			default:
 
+			}
+		}
+	})
+}
 func (t *Worker) RunForDelayQuene() {
 	t.once2.Do(func() {
 		for i := 0; i < bucketSize; i++ {
@@ -391,6 +405,8 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			} else {
 				t.jobQuene.Remove(bi.JobId)
 			}
+			//	scan any job
+			t.jobQuene.ScanTime(bi.JobId, ti)
 		}()
 	}
 

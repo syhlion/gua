@@ -33,6 +33,7 @@ var bucketNamePrefix = "BUCKET-[%s-%s]"
 // JOB-{groupName}-{jobId}
 var jobNamePrefix = "JOB-%s-%s"
 var re = regexp.MustCompile(`^SERVER-(\d+)`)
+var jobCheckRe = regexp.MustCompile(`^JOB-(\S+)-(\d+)-scan`)
 var UrlRe = regexp.MustCompile(`^(HTTP|REMOTE|LUA)\@(.+)?`)
 
 func incrServerNum(c redis.Conn) (num int, s string, err error) {
@@ -176,6 +177,7 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 		urpool:         groupRedis,
 		once1:          &sync.Once{},
 		once2:          &sync.Once{},
+		once3:          &sync.Once{},
 		httpClient:     client,
 		bucket:         bucket,
 		jobQuene:       jobQuene,
@@ -191,6 +193,7 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 
 	go worker.RunForDelayQuene()
 	go worker.RunForReadQuene()
+	go worker.RunJobCheck()
 	q := &q{
 		node:           node,
 		num:            num,
