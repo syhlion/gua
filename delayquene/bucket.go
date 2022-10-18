@@ -38,12 +38,13 @@ func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 		ss := jobCheckRe.FindStringSubmatch(v)
 
 		tlastTime := time.Unix(lastTime, 0)
-		if now.Sub(tlastTime) > 2*time.Minute {
-			err = b.Push("JOB"+"-"+"ss[1]"+"-"+"ss[2]", 0, ss[2])
+		if now.Sub(tlastTime) > 1*time.Minute {
+			err = b.Push(key, 0, "JOB"+"-"+ss[1]+"-"+ss[2])
 			if err != nil {
+				b.logger.Error("job miss but auto patch job error", "JOB"+"-"+ss[1]+"-"+ss[2], err)
 				return err
 			}
-			b.logger.Error("job miss auto patch job ", "JOB"+"-"+ss[1]+"-"+ss[2])
+			b.logger.Error("job miss and auto patch job ", "JOB"+"-"+ss[1]+"-"+ss[2])
 
 		}
 

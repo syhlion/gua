@@ -301,7 +301,7 @@ func (t *Worker) GenerateBucketName() <-chan string {
 }
 func (t *Worker) RunJobCheck() {
 	t.once3.Do(func() {
-		timer := time.NewTicker(5 * time.Second)
+		timer := time.NewTicker(30 * time.Second)
 		for {
 			select {
 			case tt := <-timer.C:
@@ -331,6 +331,8 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 		return
 	}
 	for _, bi := range bis {
+		//	scan any job
+		t.jobQuene.ScanTime(bi.JobId, ti)
 		if bi.Timestamp > ti.Unix() {
 			return
 		}
@@ -405,8 +407,6 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			} else {
 				t.jobQuene.Remove(bi.JobId)
 			}
-			//	scan any job
-			t.jobQuene.ScanTime(bi.JobId, ti)
 		}()
 	}
 
