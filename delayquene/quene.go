@@ -6,6 +6,7 @@ import (
 	"errors"
 	fmt "fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,9 +33,28 @@ var bucketNamePrefix = "BUCKET-[%s-%s]"
 
 // JOB-{groupName}-{jobId}
 var jobNamePrefix = "JOB-%s-%s"
-var re = regexp.MustCompile(`^SERVER-(\d+)`)
+var re = regexp.MustCompile(`^SERVER-(\d+)$`)
 var jobCheckRe = regexp.MustCompile(`^JOB-(\S+)-(\d+)-scan`)
 var UrlRe = regexp.MustCompile(`^(HTTP|REMOTE|LUA)\@(.+)?`)
+
+type servers []string
+
+func (s servers) Len() int {
+	return len(s)
+}
+func (s servers) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s servers) Less(i, j int) bool {
+	s1 := re.FindStringSubmatch(s[i])
+	s2 := re.FindStringSubmatch(s[j])
+	if len(s1) == 0 || len(s2) == 0 {
+		return s[i] < s[j]
+	}
+	a1, _ := strconv.Atoi(s1[1])
+	a2, _ := strconv.Atoi(s2[1])
+	return a1 < a2
+}
 
 func incrServerNum(c redis.Conn) (num int, s string, err error) {
 	serverNum, err := redis.Int(c.Do("INCR", "SERVER_TOTAL"))
@@ -75,13 +95,24 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 			return incrServerNum(c)
 		}
 	}
-	for _, serverName := range replys {
+
+	//正規式篩出 SERVER-1 排除 SERVER-1-123456
+	serverlist := make([]string, 0)
+	for _, v := range replys {
+		if re.MatchString(v) {
+			serverlist = append(serverlist, v)
+		}
+
+	}
+	sort.Sort(servers(serverlist))
+	for _, serverName := range serverlist {
 		lastTime, err := redis.Int64(c.Do("GET", serverName))
 		if err != nil {
 			return 0, "", err
 		}
-		tlastTime := time.Unix(0, lastTime)
-		if now.Sub(tlastTime) > 2*time.Second {
+
+		tlastTime := time.Unix(lastTime, 0)
+		if now.Sub(tlastTime) > 15*time.Second {
 			ss := re.FindStringSubmatch(serverName)
 			if len(ss) != 2 {
 				return 0, "", errors.New("server name match error")
