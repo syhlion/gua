@@ -1,5 +1,11 @@
 [unrelease]
 
+[v1.4.0]
+
+* add job key JOB-{}-{}-scan life-time
+* add auto check miss job key
+* fix server recover
+
 [v1.3.0]
 
 * add remote group api
