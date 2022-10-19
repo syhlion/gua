@@ -42,7 +42,7 @@ func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	replys, err := redis.Strings(c.Do("KEYS", "JOB-*-*-scan"))
+	replys, err := RedisScan(c, "JOB-*-*-scan")
 	if err != nil {
 		return err
 	}

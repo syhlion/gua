@@ -49,7 +49,7 @@ func (j *JobQuene) Remove(key string) (err error) {
 func (j *JobQuene) List(key string) (jobs []*guaproto.Job, err error) {
 	c := j.rpool.Get()
 	defer c.Close()
-	keys, err := redis.Strings(c.Do("KEYS", key))
+	keys, err := RedisScan(c, key)
 	if err != nil {
 		return
 	}

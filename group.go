@@ -24,7 +24,7 @@ func (g *Group) GetJobList(groupName string) (jobs []*guaproto.Job, err error) {
 	c := g.delayRedis.Get()
 	defer c.Close()
 	jobKey := fmt.Sprintf("JOB-%s-*", groupName)
-	keys, err := redis.Strings(c.Do("KEYS", jobKey))
+	keys, err := RedisScan(c, jobKey)
 	if err != nil {
 		return
 	}

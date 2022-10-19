@@ -1,5 +1,9 @@
 [unrelease]
 
+[v1.4.1]
+
+* remove keys use and use scan iter
+
 [v1.4.0]
 
 * add job key JOB-{}-{}-scan life-time

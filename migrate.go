@@ -82,7 +82,7 @@ func (m *Migrate) Dump(groupName string) (buf *bytes.Buffer, err error) {
 func (m *Migrate) groupBackup(groupName string) (backup map[string][]byte, err error) {
 	conn := m.groupRedis.Get()
 	defer conn.Close()
-	groupKeys, err := redis.Strings(conn.Do("KEYS", "USER_"+groupName))
+	groupKeys, err := RedisScan(conn, "USER_"+groupName)
 	if err != nil {
 		return
 	}
@@ -98,7 +98,7 @@ func (m *Migrate) groupBackup(groupName string) (backup map[string][]byte, err e
 		backup[v] = body
 
 	}
-	nodeKeys, err := redis.Strings(conn.Do("KEYS", "REMOTE_NODE_"+groupName))
+	nodeKeys, err := RedisScan(conn, "REMOTE_NODE_"+groupName)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (m *Migrate) groupBackup(groupName string) (backup map[string][]byte, err e
 func (m *Migrate) delayBackup(groupName string) (backup map[string][]byte, err error) {
 	conn := m.delayRedis.Get()
 	defer conn.Close()
-	jobKeys, err := redis.Strings(conn.Do("KEYS", "JOB-"+groupName))
+	jobKeys, err := RedisScan(conn, "JOB-"+groupName)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (m *Migrate) delayBackup(groupName string) (backup map[string][]byte, err e
 func (m *Migrate) apiBackup(groupName string) (backup map[string][]byte, err error) {
 	conn := m.apiRedis.Get()
 	defer conn.Close()
-	apiKeys, err := redis.Strings(conn.Do("KEYS", "FUNC-"+groupName))
+	apiKeys, err := RedisScan(conn, "FUNC-"+groupName)
 	if err != nil {
 		return nil, err
 	}

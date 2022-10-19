@@ -88,7 +88,7 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	replys, err := redis.Strings(c.Do("keys", "SERVER-*"))
+	replys, err := RedisScan(c, "SERVER-*")
 	if err != nil {
 
 		if err == redis.ErrNil {
@@ -154,7 +154,7 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 	}()
 
 	conn := delayRedis.Get()
-	ks, err := redis.Strings(conn.Do("keys", name+"-*"))
+	ks, err := RedisScan(conn, name+"-*")
 	if err != nil {
 		conn.Close()
 		return
@@ -162,7 +162,7 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 	if len(ks) > 0 {
 		for _, v := range ks {
 			kkeys := fmt.Sprintf("BUCKET-\\[%s\\]", v)
-			kks, err := redis.Strings(conn.Do("keys", kkeys+"-*"))
+			kks, err := RedisScan(conn, kkeys+"-*")
 			if err != nil {
 				return nil, err
 			}
@@ -307,8 +307,7 @@ func (t *q) GroupInfo(groupName string) (s string, err error) {
 func (t *q) QueryGroups() (groups []string, err error) {
 	conn := t.urpool.Get()
 	defer conn.Close()
-	return redis.Strings(conn.Do("KEYS", "USER_*"))
-
+	return RedisScan(conn, "USER_*")
 }
 func (t *q) RegisterGroup(groupName string) (otpToken string, err error) {
 	conn := t.urpool.Get()
@@ -336,7 +335,7 @@ func (t *q) QueryNodes(groupName string) (nodes []*guaproto.NodeRegisterRequest,
 	defer conn.Close()
 
 	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_*", groupName)
-	keys, err := redis.Strings(conn.Do("KEYS", remoteKey))
+	keys, err := RedisScan(conn, remoteKey)
 	if err != nil {
 		return
 	}
