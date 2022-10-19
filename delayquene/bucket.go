@@ -26,6 +26,22 @@ func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
 func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 	c := b.rpool.Get()
 	defer c.Close()
+	//redis lock 確保同時間只有一台執行
+	defer func() {
+		c.Do("DEL", "JOBCHECKLOCK")
+		c.Close()
+	}()
+	for {
+		//搶鎖 & 上鎖
+		check, err := redis.Int(c.Do("SETNX", "JOBCHECKLOCK", 1))
+		if err != nil {
+			return err
+		}
+		if check == 1 {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
 	replys, err := redis.Strings(c.Do("KEYS", "JOB-*-*-scan"))
 	if err != nil {
 		return err

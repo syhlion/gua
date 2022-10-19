@@ -305,7 +305,10 @@ func (t *Worker) RunJobCheck() {
 		for {
 			select {
 			case tt := <-timer.C:
-				t.bucket.JobCheck(<-t.bucketNameChan, tt)
+				err := t.bucket.JobCheck(<-t.bucketNameChan, tt)
+				if err != nil {
+					t.logger.Error("run job check error", err)
+				}
 			default:
 
 			}
