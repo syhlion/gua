@@ -20,7 +20,8 @@ func RedisScan(c redis.Conn, match string) (keys []string, err error) {
 		} else {
 
 			iter, _ = redis.Int(arr[0], nil)
-			keys, _ = redis.Strings(arr[1], nil)
+			tmpkeys, _ := redis.Strings(arr[1], nil)
+			keys = append(keys, tmpkeys...)
 		}
 
 		if iter == 0 {
