@@ -10,7 +10,7 @@ func RedisScan(c redis.Conn, match string) (keys []string, err error) {
 
 	for {
 
-		if arr, err := redis.Values(c.Do("SCAN", iter, "MATCH", match, "COUNT", 100)); err != nil {
+		if arr, err := redis.Values(c.Do("SCAN", iter, "MATCH", match, "COUNT", 1000)); err != nil {
 			return nil, err
 		} else {
 

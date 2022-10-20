@@ -1,12 +1,15 @@
 package delayquene
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	guaproto "github.com/syhlion/gua/proto"
 )
+
+var jobRe = regexp.MustCompile(`^JOB-(\S+)-(\d+)$`)
 
 type JobQuene struct {
 	rpool *redis.Pool
@@ -55,16 +58,18 @@ func (j *JobQuene) List(key string) (jobs []*guaproto.Job, err error) {
 	}
 	jobs = make([]*guaproto.Job, 0)
 	for _, v := range keys {
-		b, err := redis.Bytes(c.Do("GET", v))
-		if err != nil {
-			continue
+		if jobRe.MatchString(v) {
+			b, err := redis.Bytes(c.Do("GET", v))
+			if err != nil {
+				continue
+			}
+			jb := &guaproto.Job{}
+			err = proto.Unmarshal(b, jb)
+			if err != nil {
+				continue
+			}
+			jobs = append(jobs, jb)
 		}
-		jb := &guaproto.Job{}
-		err = proto.Unmarshal(b, jb)
-		if err != nil {
-			continue
-		}
-		jobs = append(jobs, jb)
 	}
 	return
 }
