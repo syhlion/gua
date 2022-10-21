@@ -115,17 +115,24 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 		b.logger.Infof("GET New Server:%s Merge to %s Finish", downBucket, key)
 	}()
 
-	reply, err := redis.Values(c.Do("ZRANGE", key, 0, 30, "WITHSCORES"))
+	reply, err := redis.Values(c.Do("ZRANGE", key, 0, -1, "WITHSCORES"))
 	if err != nil {
 		return
 	}
 	items = make([]*BucketItem, 0)
+	t := time.Now().Unix()
 	for i := 0; i < len(reply); i += 2 {
 		item := &BucketItem{}
 		key, err := redis.String(reply[i], nil)
 		if err != nil {
 			return nil, err
 		}
+		//有經過的任務，增加任務時間
+		_, err = c.Do("SET", key+"-scan", t)
+		if err != nil {
+			return nil, err
+		}
+		//把任務解析成 item worker 執行
 		value, err := redis.Int64(reply[i+1], nil)
 		if err != nil {
 			return nil, err

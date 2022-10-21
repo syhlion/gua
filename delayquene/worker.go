@@ -334,8 +334,6 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 		return
 	}
 	for _, bi := range bis {
-		//	scan any job
-		t.jobQuene.ScanTime(bi.JobId, ti)
 		if bi.Timestamp > ti.Unix() {
 			return
 		}

@@ -1,8 +1,6 @@
 package delayquene
 
 import (
-	"time"
-
 	"github.com/gogo/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	guaproto "github.com/syhlion/gua/proto"
@@ -21,12 +19,6 @@ func (j *JobQuene) Get(key string) (jb *guaproto.Job, err error) {
 	}
 	jb = &guaproto.Job{}
 	err = proto.Unmarshal(reply, jb)
-	return
-}
-func (j *JobQuene) ScanTime(key string, t time.Time) (err error) {
-	c := j.rpool.Get()
-	defer c.Close()
-	_, err = c.Do("SET", key+"-scan", t.Unix())
 	return
 }
 
