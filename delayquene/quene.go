@@ -34,7 +34,7 @@ var bucketNamePrefix = "BUCKET-[%s-%s]"
 // JOB-{groupName}-{jobId}
 var jobNamePrefix = "JOB-%s-%s"
 var re = regexp.MustCompile(`^SERVER-(\d+)$`)
-var jobCheckRe = regexp.MustCompile(`^JOB-(\S+)-(\d+)-scan`)
+var jobCheckRe = regexp.MustCompile(`^JOB-(.+)-(\d+)-scan$`)
 var UrlRe = regexp.MustCompile(`^(HTTP|REMOTE|LUA)\@(.+)?`)
 
 type servers []string

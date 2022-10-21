@@ -9,7 +9,7 @@ import (
 	guaproto "github.com/syhlion/gua/proto"
 )
 
-var jobRe = regexp.MustCompile(`^JOB-(\S+)-(\d+)$`)
+var jobRe = regexp.MustCompile(`^JOB-(.+)-(\d+)$`)
 
 type JobQuene struct {
 	rpool *redis.Pool

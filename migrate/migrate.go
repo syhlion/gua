@@ -90,15 +90,12 @@ func (m *Migrate) Dump(groupName string) (buf *bytes.Buffer, err error) {
 func (m *Migrate) groupBackup(groupName string) (backup map[string][]byte, err error) {
 	conn := m.groupRedis.Get()
 	defer conn.Close()
-	groupKeys, err := redis.Strings(conn.Do("KEYS", "USER_"+groupName))
+	groupKeys, err := RedisScan(conn, "USER_"+groupName)
 	if err != nil {
 		return
 	}
 	backup = make(map[string][]byte)
 	for _, v := range groupKeys {
-		if err != nil {
-			return nil, err
-		}
 		body, err := redis.Bytes(conn.Do("GET", v))
 		if err != nil {
 			return nil, err
@@ -109,14 +106,11 @@ func (m *Migrate) groupBackup(groupName string) (backup map[string][]byte, err e
 	if groupName != "*" {
 		groupName = groupName + "_*"
 	}
-	nodeKeys, err := redis.Strings(conn.Do("KEYS", "REMOTE_NODE_"+groupName))
+	nodeKeys, err := RedisScan(conn, "REMOTE_NODE_"+groupName)
 	if err != nil {
 		return nil, err
 	}
 	for _, v := range nodeKeys {
-		if err != nil {
-			return nil, err
-		}
 		body, err := redis.Bytes(conn.Do("GET", v))
 		if err != nil {
 			return nil, err
@@ -132,14 +126,14 @@ func (m *Migrate) delayBackup(groupName string) (backup map[string][]byte, err e
 	if groupName != "*" {
 		groupName = groupName + "-*"
 	}
-	jobKeys, err := redis.Strings(conn.Do("KEYS", "JOB-"+groupName))
+	jobKeys, err := RedisScan(conn, "JOB-"+groupName)
 	if err != nil {
 		return nil, err
 	}
 	backup = make(map[string][]byte)
 	for _, v := range jobKeys {
-		if err != nil {
-			return nil, err
+		if jobRe.MatchString(v) {
+			continue
 		}
 		body, err := redis.Bytes(conn.Do("GET", v))
 		if err != nil {
@@ -162,9 +156,6 @@ func (m *Migrate) apiBackup(groupName string) (backup map[string][]byte, err err
 	}
 	backup = make(map[string][]byte)
 	for _, v := range apiKeys {
-		if err != nil {
-			return nil, err
-		}
 		body, err := redis.Bytes(conn.Do("GET", v))
 		if err != nil {
 			return nil, err
@@ -176,7 +167,7 @@ func (m *Migrate) apiBackup(groupName string) (backup map[string][]byte, err err
 }
 
 var (
-	jobRe   = regexp.MustCompile("^JOB-")
+	jobRe   = regexp.MustCompile(`^JOB-(.+)-(\d+)$`)
 	groupRe = regexp.MustCompile("^USER_")
 	funcRe  = regexp.MustCompile("^FUNC-")
 	nodeRe  = regexp.MustCompile("^REMOTE_NODE_")
@@ -229,7 +220,7 @@ func (m *Migrate) Import(b []byte) (err error) {
 				if err != nil {
 					return
 				}
-				job.Active = false
+				job.Active = true
 
 				b, err := proto.Marshal(job)
 				if err != nil {
@@ -237,6 +228,10 @@ func (m *Migrate) Import(b []byte) (err error) {
 				}
 
 				_, err = conn.Do("SET", h.Name, b)
+				if err != nil {
+					return
+				}
+				_, err = conn.Do("SET", h.Name+"-scan", 0)
 				if err != nil {
 					return
 				}

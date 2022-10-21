@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"io"
 	"regexp"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
@@ -159,7 +160,7 @@ func (m *Migrate) apiBackup(groupName string) (backup map[string][]byte, err err
 }
 
 var (
-	jobRe   = regexp.MustCompile("^JOB-")
+	jobRe   = regexp.MustCompile(`^JOB-(.+)-(\d+)$`)
 	groupRe = regexp.MustCompile("^USER_")
 	funcRe  = regexp.MustCompile("^FUNC-")
 	nodeRe  = regexp.MustCompile("^REMOTE_NODE_")
@@ -212,7 +213,7 @@ func (m *Migrate) Import(b []byte) (err error) {
 				if err != nil {
 					return
 				}
-				job.Active = false
+				job.Active = true
 
 				b, err := proto.Marshal(job)
 				if err != nil {
@@ -220,6 +221,10 @@ func (m *Migrate) Import(b []byte) (err error) {
 				}
 
 				_, err = conn.Do("SET", h.Name, b)
+				if err != nil {
+					return
+				}
+				_, err = conn.Do("SET", h.Name+"-scan", time.Now())
 				if err != nil {
 					return
 				}
