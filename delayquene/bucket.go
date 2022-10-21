@@ -1,6 +1,7 @@
 package delayquene
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -42,11 +43,39 @@ func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 		}
 		time.Sleep(1 * time.Second)
 	}
-	replys, err := RedisScan(c, "JOB-*-*-scan")
+	//先檢查是否有有JOB 但沒有scan的JOB
+
+	replysJob, err := RedisScan(c, "JOB-*")
+	for _, v := range replysJob {
+		if jobRe.MatchString(v) {
+			_, err := redis.Int64(c.Do("GET", v+"-scan"))
+			if err == redis.ErrNil {
+				_, err := c.Do("SET", v+"-scan", 0)
+				if err != nil {
+					b.logger.Error("redis set scan error", err)
+				}
+				continue
+			}
+		}
+	}
+
+	replys, err := RedisScan(c, "JOB-*-scan")
 	if err != nil {
 		return err
 	}
 	for _, v := range replys {
+		//檢查是否有多餘的點查並且刪除除除除除除
+		t := strings.Trim(v, "-scan")
+		_, err := redis.Bytes(c.Do("GET", t))
+		if err == redis.ErrNil {
+			_, err := c.Do("DEL", v)
+			if err != nil {
+				b.logger.Error("job miss main job redis error:", err)
+			}
+			b.logger.Error("job miss main job", err)
+			continue
+		}
+		//開始檢查是否由遺失的任務
 		lastTime, err := redis.Int64(c.Do("GET", v))
 		if err != nil {
 			return err

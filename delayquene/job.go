@@ -1,15 +1,12 @@
 package delayquene
 
 import (
-	"regexp"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	guaproto "github.com/syhlion/gua/proto"
 )
-
-var jobRe = regexp.MustCompile(`^JOB-(.+)-(\d+)$`)
 
 type JobQuene struct {
 	rpool *redis.Pool

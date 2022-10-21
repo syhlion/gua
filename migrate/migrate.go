@@ -132,7 +132,7 @@ func (m *Migrate) delayBackup(groupName string) (backup map[string][]byte, err e
 	}
 	backup = make(map[string][]byte)
 	for _, v := range jobKeys {
-		if jobRe.MatchString(v) {
+		if !jobRe.MatchString(v) {
 			continue
 		}
 		body, err := redis.Bytes(conn.Do("GET", v))
