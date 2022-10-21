@@ -36,6 +36,7 @@ func (j *JobQuene) Remove(key string) (err error) {
 	c := j.rpool.Get()
 	defer c.Close()
 	_, err = c.Do("DEL", key)
+	_, err = c.Do("DEL", key+"scan")
 	return
 }
 func (j *JobQuene) List(key string) (jobs []*guaproto.Job, err error) {
