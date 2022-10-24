@@ -31,6 +31,7 @@ func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 	defer func() {
 		c.Do("DEL", "JOBCHECKLOCK")
 		c.Close()
+		return
 	}()
 	for {
 		//搶鎖 & 上鎖

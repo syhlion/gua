@@ -313,6 +313,7 @@ func (t *Worker) RunJobCheck() {
 
 			}
 		}
+		t.logger.Error("RunJobCheck error")
 	})
 }
 func (t *Worker) RunForDelayQuene() {
