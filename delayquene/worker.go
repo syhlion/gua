@@ -87,6 +87,22 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 			}
 
 		}
+		t.logger.WithFields(logrus.Fields{
+			"Exectime":           execTime,
+			"FinishTime":         finishTime,
+			"PlanTime":           job.PlanTime,
+			"GetJobTime":         job.GetJobTime,
+			"JobId":              job.Id,
+			"Type":               cmdType,
+			"GetJobMachineHost":  job.GetJobMachineHost,
+			"GetJobMachineIp":    job.GetJobMachineIp,
+			"GetJobMachineMac":   job.GetJobMachineMac,
+			"ExecJobMachineHost": t.machineHost,
+			"ExecJobMachineMac":  t.machineMac,
+			"ExecJobMachineIp":   t.machineIp,
+			"GroupName":          job.GroupName,
+		}).Info("Job Send Finish")
+
 	}()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
 
