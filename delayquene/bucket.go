@@ -26,20 +26,21 @@ func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
 }
 func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 	c := b.rpool.Get()
-	defer c.Close()
 	//redis lock 確保同時間只有一台執行
 	defer func() {
 		c.Do("DEL", "JOBCHECKLOCK")
 		c.Close()
 		return
 	}()
+	var i = 0
 	for {
+		i++
 		//搶鎖 & 上鎖
 		check, err := redis.Int(c.Do("SETNX", "JOBCHECKLOCK", 1))
 		if err != nil {
 			return err
 		}
-		if check == 1 {
+		if check == 1 || i >= 20 {
 			break
 		}
 		time.Sleep(1 * time.Second)

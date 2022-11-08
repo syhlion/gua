@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"strings"
 	"sync"
@@ -316,8 +317,11 @@ func (t *Worker) GenerateBucketName() <-chan string {
 	return c
 }
 func (t *Worker) RunJobCheck() {
+	rand.Seed(time.Now().UnixNano())
+	r := 30 + rand.Intn(30)
+	t.logger.Info("JobCheck gap ", r, " Second")
 	t.once3.Do(func() {
-		timer := time.NewTicker(30 * time.Second)
+		timer := time.NewTicker(time.Duration(r) * time.Second)
 		for {
 			select {
 			case tt := <-timer.C:
