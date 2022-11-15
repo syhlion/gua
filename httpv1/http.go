@@ -378,6 +378,7 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		logger.Infof("success add job: %v, origin payload: %v", job, payload)
 
 		//nodeId := strconv.FormatInt(node.id, 10)
 		restresp.Write(w, job.Id, http.StatusOK)
@@ -406,6 +407,7 @@ func RemoveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reque
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		logger.Infof("success remove job: %v", payload)
 		restresp.Write(w, "ok", http.StatusOK)
 		return
 
@@ -433,6 +435,7 @@ func PauseJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reques
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		logger.Infof("success pause job: %v", payload)
 		restresp.Write(w, "ok", http.StatusOK)
 		return
 
@@ -460,6 +463,7 @@ func ActiveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reque
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		logger.Infof("success active job: %v", payload)
 		restresp.Write(w, "ok", http.StatusOK)
 		return
 

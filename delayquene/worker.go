@@ -286,7 +286,10 @@ func (t *Worker) DelayQueneWorker(timer *time.Ticker, closeSign chan int, realBu
 	defer func() {
 		conn := t.bucket.rpool.Get()
 		_, err := conn.Do("LPUSH", "down-server", realBucketName)
-		t.logger.Debugf("down-server:%s,err:%s", realBucketName, err)
+		if err != nil {
+			t.logger.Errorf("down-server error%s", realBucketName)
+		}
+		t.logger.Infof("down-server:%s", realBucketName)
 		t.wait.Done()
 	}()
 	for {
@@ -325,7 +328,7 @@ func (t *Worker) RunJobCheck() {
 		for {
 			select {
 			case tt := <-timer.C:
-				err := t.bucket.JobCheck(<-t.bucketNameChan, tt)
+				err := t.bucket.JobCheck(<-t.bucketNameChan, tt, t.machineHost)
 				if err != nil {
 					t.logger.Error("run job check error", err)
 				}

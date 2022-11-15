@@ -22,9 +22,12 @@ func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
 	c := b.rpool.Get()
 	defer c.Close()
 	_, err = c.Do("ZADD", key, timestamp, jobId)
+	if err != nil {
+		b.logger.Errorf("bucket push error %s", err)
+	}
 	return
 }
-func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
+func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err error) {
 	c := b.rpool.Get()
 	//redis lock 確保同時間只有一台執行
 	defer func() {
@@ -45,6 +48,9 @@ func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 		}
 		time.Sleep(1 * time.Second)
 	}
+
+	b.logger.Infof("jobcheck start from %s. worker start at %s jobecheck exec %s. repeat %d", machineHost, now, time.Now(), i)
+
 	//先檢查是否有有JOB 但沒有scan的JOB
 
 	replysJob, err := RedisScan(c, "JOB-*")
@@ -74,10 +80,10 @@ func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 			if err != nil {
 				b.logger.Error("job miss main job redis error:", err)
 			}
-			b.logger.Error("job miss main job", err)
+			b.logger.Errorf("job miss main job %s", t)
 			continue
 		}
-		//開始檢查是否由遺失的任務
+		//開始檢查是否有遺失的任務
 		lastTime, err := redis.Int64(c.Do("GET", v))
 		if err != nil {
 			return err
@@ -96,6 +102,7 @@ func (b *Bucket) JobCheck(key string, now time.Time) (err error) {
 		}
 
 	}
+	b.logger.Infof("jobcheck finish at %s from %s", time.Now(), machineHost)
 	return
 }
 func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
