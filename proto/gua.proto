@@ -1,5 +1,6 @@
 syntax = "proto3";
 package guaproto;
+option go_package = "github.com/syhlion/gua/proto/guaproto";
 message JobReplyRequest {
    string job_id = 1;
    string success = 2;

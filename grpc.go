@@ -23,6 +23,9 @@ type Gua struct {
 	rpool      *redis.Pool
 }
 
+func (g *Gua) mustEmbedUnimplementedGuaServer() {
+}
+
 func (g *Gua) NodeRegister(ctx context.Context, req *guaproto.NodeRegisterRequest) (resp *guaproto.NodeRegisterResponse, err error) {
 	logger.Infof("receive node register. request:%#v", req)
 	if req.MachineCode != g.config.MachineCode {

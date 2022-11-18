@@ -36,10 +36,10 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 		return
 	}()
 	var i = 0
+	var check = 0
 	for {
-		i++
 		//搶鎖 & 上鎖
-		check, err := redis.Int(c.Do("SETNX", "JOBCHECKLOCK", 1))
+		check, err = redis.Int(c.Do("SETNX", "JOBCHECKLOCK", 1))
 		if err != nil {
 			return err
 		}
@@ -47,6 +47,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 			break
 		}
 		time.Sleep(1 * time.Second)
+		i++
 	}
 
 	b.logger.Infof("jobcheck start from %s. worker start at %s jobecheck exec %s. repeat %d", machineHost, now, time.Now(), i)

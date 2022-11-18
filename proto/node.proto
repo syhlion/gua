@@ -1,5 +1,6 @@
 syntax = "proto3";
 package guaproto;
+option go_package = "github.com/syhlion/gua/proto/guaproto";
 message RemoteCommandRequest {
    bytes exec_cmd = 1;
    string job_id = 2;
