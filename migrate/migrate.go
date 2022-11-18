@@ -7,7 +7,7 @@ import (
 	"io"
 	"regexp"
 
-	"github.com/gogo/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	guaproto "github.com/syhlion/gua/proto"
 )

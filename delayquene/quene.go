@@ -16,7 +16,7 @@ import (
 	"github.com/yuin/gopher-lua/parse"
 
 	"github.com/bwmarrin/snowflake"
-	"github.com/gogo/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	"github.com/pquerna/otp/totp"
 	"github.com/syhlion/greq"
