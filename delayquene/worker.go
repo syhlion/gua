@@ -365,12 +365,16 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			defer func() {
 				if err != nil {
 					t.bucket.Remove(realBucketName, bi.JobId)
+					//auto push
+					t.bucket.Push(<-t.bucketNameChan, time.Now().Unix(), bi.JobId)
+					t.logger.WithError(err).Errorf("job bucket has error remove  jobId %s", bi.JobId)
 				}
 			}()
 			job, err := t.jobQuene.Get(bi.JobId)
 			if err != nil {
-				t.bucket.Remove(realBucketName, bi.JobId)
-				t.jobQuene.Remove(bi.JobId)
+				t.logger.WithError(err).Error("jobQuene get error")
+				//t.bucket.Remove(realBucketName, bi.JobId)
+				//t.jobQuene.Remove(bi.JobId)
 				return
 			}
 
@@ -391,6 +395,8 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				groupKey := fmt.Sprintf("USER_%s", job.GroupName)
 				token, err = redis.String(conn.Do("GET", groupKey))
 				if err != nil {
+					//t.bucket.Remove(realBucketName, bi.JobId)
+					t.logger.WithError(err).Error("optToken error")
 					return
 				}
 			} else {
@@ -414,14 +420,19 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			//push to ready quene
 			b, err := proto.Marshal(rj)
 			if err != nil {
-				//fmt.Println(err)
+				//t.bucket.Remove(realBucketName, bi.JobId)
+				t.logger.WithError(err).Error("push to ready quene marshal error")
 				return
 			}
 			c := t.rpool.Get()
-			c.Do("RPUSH", "GUA-READY-JOB", b)
+			_, err = c.Do("RPUSH", "GUA-READY-JOB", b)
+			if err != nil {
+				t.logger.WithError(err).Error("push to ready redis error")
+				return
+			}
 			c.Close()
-			//remove bucket
 
+			//remove bucket
 			t.bucket.Remove(realBucketName, bi.JobId)
 			if job.IntervalPattern != "@once" {
 				sch, _ := Parse(job.IntervalPattern)
