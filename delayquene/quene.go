@@ -548,6 +548,7 @@ func (t *q) Delete(groupName, jobId string) (err error) {
 	defer conn.Close()
 	jobKey := fmt.Sprintf(jobNamePrefix, groupName, jobId)
 	_, err = conn.Do("DEL", jobKey)
+	_, err = conn.Do("DEL", jobKey+"-scan")
 	return
 }
 func (t *q) Heartbeat(nodeId string, groupName string) (err error) {
