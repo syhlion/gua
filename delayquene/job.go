@@ -32,14 +32,12 @@ func (j *JobQuene) Add(key string, jb *guaproto.Job) (err error) {
 	c := j.rpool.Get()
 	defer c.Close()
 	var i = 0
+	var check = 0
 	t := time.NewTimer(100 * time.Millisecond)
 	for {
 		//確認是否有鎖
-		_, err = c.Do("GET", "JOBCHECKLOCK")
-		if err == redis.ErrNil || i >= 10 {
-			break
-		}
-		if err != nil {
+		check, err = redis.Int(c.Do("GET", "JOBCHECKLOCK"))
+		if check == 0 || i >= 10 {
 			break
 		}
 		<-t.C
@@ -55,15 +53,13 @@ func (j *JobQuene) Remove(key string) (err error) {
 	c := j.rpool.Get()
 	defer c.Close()
 	var i = 0
+	var check = 0
 	t := time.NewTimer(100 * time.Millisecond)
 	for {
 		//確認是否有鎖
-		_, err = c.Do("GET", "JOBCHECKLOCK")
+		check, err = redis.Int(c.Do("GET", "JOBCHECKLOCK"))
 
-		if err == redis.ErrNil || i >= 10 {
-			break
-		}
-		if err != nil {
+		if check == 0 || i >= 10 {
 			break
 		}
 		<-t.C
