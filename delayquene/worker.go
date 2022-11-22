@@ -372,17 +372,17 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			var err error
 			defer func() {
 				if err != nil {
-					t.bucket.Remove(realBucketName, bi.JobId)
+					//t.bucket.Remove(realBucketName, bi.JobId)
 					//auto push
-					t.bucket.Push(<-t.bucketNameChan, time.Now().Unix(), bi.JobId)
-					t.logger.WithError(err).Errorf("job bucket has error remove  jobId %s", bi.JobId)
+					//t.bucket.Push(<-t.bucketNameChan, time.Now().Unix(), bi.JobId)
+
+					t.logger.WithError(err).Errorf("job bucket has error")
 				}
 			}()
 			job, err := t.jobQuene.Get(bi.JobId)
 			if err != nil {
 				t.logger.WithError(err).Error("jobQuene get error")
-				//t.bucket.Remove(realBucketName, bi.JobId)
-				//t.jobQuene.Remove(bi.JobId)
+				t.bucket.Remove(realBucketName, bi.JobId)
 				return
 			}
 
@@ -403,8 +403,8 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				groupKey := fmt.Sprintf("USER_%s", job.GroupName)
 				token, err = redis.String(conn.Do("GET", groupKey))
 				if err != nil {
-					//t.bucket.Remove(realBucketName, bi.JobId)
-					t.logger.WithError(err).Error("optToken error")
+					t.bucket.Remove(realBucketName, bi.JobId)
+					t.logger.WithError(err).Errorㄑ("optToken error job %v", job)
 					return
 				}
 			} else {
@@ -428,14 +428,14 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			//push to ready quene
 			b, err := proto.Marshal(rj)
 			if err != nil {
-				//t.bucket.Remove(realBucketName, bi.JobId)
-				t.logger.WithError(err).Error("push to ready quene marshal error")
+				t.bucket.Remove(realBucketName, bi.JobId)
+				t.logger.WithError(err).Error("push to ready quene marshal error job %v", job)
 				return
 			}
 			c := t.rpool.Get()
 			_, err = c.Do("RPUSH", "GUA-READY-JOB", b)
 			if err != nil {
-				t.logger.WithError(err).Error("push to ready redis error")
+				t.logger.WithError(err).Errorf("push to ready redis error job %v", job)
 				return
 			}
 			c.Close()
