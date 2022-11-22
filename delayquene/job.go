@@ -1,12 +1,11 @@
 package delayquene
 
 import (
-	"errors"
 	"time"
 
-	"google.golang.org/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	guaproto "github.com/syhlion/gua/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type JobQuene struct {
@@ -31,58 +30,46 @@ func (j *JobQuene) Add(key string, jb *guaproto.Job) (err error) {
 		return
 	}
 	c := j.rpool.Get()
-	//redis lock 確保同時間 jobcheck跟 add job 不會同時進行
-	defer func() {
-		c.Close()
-		return
-	}()
+	defer c.Close()
 	var i = 0
-	var check = 0
+	t := time.NewTimer(100 * time.Millisecond)
 	for {
-		//搶鎖 & 上鎖
-		check, err = redis.Int(c.Do("SETNX", "JOBCHECKLOCK", 1))
-		if err != nil {
-			return err
-		}
-		if i >= 25 {
-			err = errors.New("add joblock error")
-			return
-		}
-		if check == 1 {
+		//確認是否有鎖
+		_, err = c.Do("GET", "JOBCHECKLOCK")
+		if err == redis.ErrNil || i >= 10 {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		if err != nil {
+			break
+		}
+		<-t.C
+		t.Reset(100 * time.Millisecond)
 		i++
-	}
 
+	}
 	_, err = c.Do("SET", key, b)
 	_, err = c.Do("SET", key+"-scan", time.Now().Unix())
 	return
 }
 func (j *JobQuene) Remove(key string) (err error) {
 	c := j.rpool.Get()
-	//redis lock 確保同時間 jobcheck跟 remove job 不會同時進行
-	defer func() {
-		c.Close()
-		return
-	}()
+	defer c.Close()
 	var i = 0
-	var check = 0
+	t := time.NewTimer(100 * time.Millisecond)
 	for {
-		//搶鎖 & 上鎖
-		check, err = redis.Int(c.Do("SETNX", "JOBCHECKLOCK", 1))
-		if err != nil {
-			return err
-		}
-		if i >= 25 {
-			err = errors.New("remove joblock error")
-			return
-		}
-		if check == 1 || i >= 20 {
+		//確認是否有鎖
+		_, err = c.Do("GET", "JOBCHECKLOCK")
+
+		if err == redis.ErrNil || i >= 10 {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		if err != nil {
+			break
+		}
+		<-t.C
+		t.Reset(100 * time.Millisecond)
 		i++
+
 	}
 	_, err = c.Do("DEL", key)
 	_, err = c.Do("DEL", key+"-scan")

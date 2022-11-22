@@ -1,7 +1,9 @@
 package delayquene
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -14,8 +16,10 @@ type BucketItem struct {
 }
 
 type Bucket struct {
-	rpool  *redis.Pool
-	logger *logrus.Logger
+	lock     *sync.RWMutex
+	stopFlag int
+	rpool    *redis.Pool
+	logger   *logrus.Logger
 }
 
 func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
@@ -31,12 +35,16 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 	c := b.rpool.Get()
 	//redis lock 確保同時間只有一台執行
 	defer func() {
-		c.Do("DEL", "JOBCHECKLOCK")
+		_, err = c.Do("DEL", "JOBCHECKLOCK")
+		if err != nil {
+			b.logger.WithError(err).Error("DEL JOBCHECK error")
+		}
 		c.Close()
 		return
 	}()
 	var i = 0
 	var check = 0
+	t := time.NewTimer(1 * time.Second)
 	for {
 		//搶鎖 & 上鎖
 		check, err = redis.Int(c.Do("SETNX", "JOBCHECKLOCK", 1))
@@ -46,11 +54,11 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 		if check == 1 || i >= 20 {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		<-t.C
+		t.Reset(1 * time.Second)
 		i++
 	}
-
-	b.logger.Infof("jobcheck start from %s. worker start at %s jobecheck exec %s. repeat %d", machineHost, now, time.Now(), i)
+	jobCheckStart := time.Now()
 
 	//先檢查是否有有JOB 但沒有scan的JOB
 
@@ -59,7 +67,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 		if jobRe.MatchString(v) {
 			_, err := redis.Int64(c.Do("GET", v+"-scan"))
 			if err == redis.ErrNil {
-				_, err := c.Do("SET", v+"-scan", 0)
+				_, err := c.Do("SET", v+"-scan", time.Now().Unix())
 				if err != nil {
 					b.logger.Error("redis set scan error", err)
 				}
@@ -103,12 +111,25 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 		}
 
 	}
-	b.logger.Infof("jobcheck finish at %s from %s", time.Now(), machineHost)
+	jobCheckEnd := time.Now()
+	b.logger.WithFields(logrus.Fields{
+		"jobcheck_start_lock":  now,
+		"jobcheck_start":       jobCheckStart,
+		"jobcheck_end":         jobCheckEnd,
+		"jobcheck_total":       fmt.Sprintf("duration: %v", jobCheckEnd.Sub(jobCheckStart)),
+		"jobcheck_exec_host":   machineHost,
+		"jobcheck_exec_repeat": i,
+	}).Info("jobcheck")
 	return
 }
 func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 	c := b.rpool.Get()
 	defer func() {
+		b.lock.RLock()
+		defer b.lock.RUnlock()
+		if b.stopFlag == 1 {
+			return
+		}
 		downBucket, err := redis.String(c.Do("LPOP", "down-server"))
 		if err != nil {
 			c.Close()
@@ -163,4 +184,9 @@ func (b *Bucket) Remove(key string, jobId string) (err error) {
 	_, err = c.Do("ZREM", key, jobId)
 	return
 
+}
+func (b *Bucket) Close() {
+	b.lock.Lock()
+	b.stopFlag = 1
+	b.lock.Unlock()
 }

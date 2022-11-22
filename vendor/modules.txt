@@ -74,11 +74,11 @@ github.com/syhlion/glua-libs/regexp
 github.com/syhlion/glua-libs/strings
 github.com/syhlion/glua-libs/telegram
 github.com/syhlion/glua-libs/time
-# github.com/syhlion/greq v1.1.1
-## explicit; go 1.12
+# github.com/syhlion/greq v1.1.2
+## explicit; go 1.19
 github.com/syhlion/greq
-# github.com/syhlion/requestwork.v2 v0.0.0-20210119021838-2bc6ad110469
-## explicit; go 1.12
+# github.com/syhlion/requestwork.v2 v0.0.0-20221121064106-5982b8b66fbe
+## explicit; go 1.19
 github.com/syhlion/requestwork.v2
 # github.com/syhlion/restresp v0.0.0-20170323032640-7fe232e5b740
 ## explicit
@@ -117,10 +117,10 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# google.golang.org/genproto v0.0.0-20221117204609-8f9c96812029
+# google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.50.1
+# google.golang.org/grpc v1.51.0
 ## explicit; go 1.17
 google.golang.org/grpc
 google.golang.org/grpc/attributes

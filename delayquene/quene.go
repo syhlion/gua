@@ -16,7 +16,6 @@ import (
 	"github.com/yuin/gopher-lua/parse"
 
 	"github.com/bwmarrin/snowflake"
-	"google.golang.org/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	"github.com/pquerna/otp/totp"
 	"github.com/syhlion/greq"
@@ -24,6 +23,7 @@ import (
 	guaproto "github.com/syhlion/gua/proto"
 	requestwork "github.com/syhlion/requestwork.v2"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 const bucketSize = 30
@@ -180,8 +180,10 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 	conn.Close()
 
 	bucket := &Bucket{
-		rpool:  delayRedis,
-		logger: config.Logger,
+		rpool:    delayRedis,
+		logger:   config.Logger,
+		lock:     &sync.RWMutex{},
+		stopFlag: 0,
 	}
 	jobQuene := &JobQuene{
 		rpool: delayRedis,
@@ -202,23 +204,24 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 	}
 	conn.Close()
 	worker := &Worker{
-		bucketName:     fmt.Sprintf(bucketNamePrefix, name, ts) + "-%d",
-		realServerName: name + "-" + ts,
-		timers:         make([]*time.Ticker, bucketSize),
-		rpool:          readyRedis,
-		urpool:         groupRedis,
-		once1:          &sync.Once{},
-		once2:          &sync.Once{},
-		once3:          &sync.Once{},
-		httpClient:     client,
-		bucket:         bucket,
-		jobQuene:       jobQuene,
-		jobReplyUrl:    config.JobReplyUrl,
-		machineHost:    config.MachineHost,
-		machineMac:     config.MachineMac,
-		machineIp:      config.MachineIp,
-		logger:         config.Logger,
-		closeSign:      make([]chan int, bucketSize),
+		bucketName:           fmt.Sprintf(bucketNamePrefix, name, ts) + "-%d",
+		realServerName:       name + "-" + ts,
+		timers:               make([]*time.Ticker, bucketSize),
+		rpool:                readyRedis,
+		urpool:               groupRedis,
+		once1:                &sync.Once{},
+		once2:                &sync.Once{},
+		once3:                &sync.Once{},
+		httpClient:           client,
+		bucket:               bucket,
+		jobQuene:             jobQuene,
+		jobReplyUrl:          config.JobReplyUrl,
+		machineHost:          config.MachineHost,
+		machineMac:           config.MachineMac,
+		machineIp:            config.MachineIp,
+		logger:               config.Logger,
+		closeSign:            make([]chan int, bucketSize),
+		closeSignForJobcheck: make(chan int, 1),
 	}
 	bucketChan := worker.GenerateBucketName()
 	worker.bucketNameChan = bucketChan

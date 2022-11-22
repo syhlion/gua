@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"
@@ -22,6 +21,7 @@ import (
 	guaproto "github.com/syhlion/gua/proto"
 	lua "github.com/yuin/gopher-lua"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 type Worker struct {
@@ -42,12 +42,13 @@ type Worker struct {
 	once2          *sync.Once
 	once3          *sync.Once
 
-	timers         []*time.Ticker
-	bucket         *Bucket
-	jobQuene       *JobQuene
-	bucketNameChan <-chan string
-	closeSign      []chan int
-	wait           sync.WaitGroup
+	timers               []*time.Ticker
+	bucket               *Bucket
+	jobQuene             *JobQuene
+	bucketNameChan       <-chan string
+	closeSign            []chan int
+	closeSignForJobcheck chan int
+	wait                 sync.WaitGroup
 }
 
 func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
@@ -264,6 +265,9 @@ func (t *Worker) ReadyQueneWorker() {
 
 }
 func (t *Worker) Close() {
+	t.bucket.Close()
+	t.closeSignForJobcheck <- 1
+	close(t.closeSignForJobcheck)
 	for _, v := range t.closeSign {
 		v <- 1
 		close(v)
@@ -290,6 +294,7 @@ func (t *Worker) DelayQueneWorker(timer *time.Ticker, closeSign chan int, realBu
 			t.logger.Errorf("down-server error%s", realBucketName)
 		}
 		t.logger.Infof("down-server:%s", realBucketName)
+		conn.Close()
 		t.wait.Done()
 	}()
 	for {
@@ -324,7 +329,7 @@ func (t *Worker) RunJobCheck() {
 	r := 30 + rand.Intn(30)
 	t.logger.Info("JobCheck gap ", r, " Second")
 	t.once3.Do(func() {
-		timer := time.NewTicker(time.Duration(5) * time.Second)
+		timer := time.NewTicker(time.Duration(r) * time.Second)
 		for {
 			select {
 			case tt := <-timer.C:
@@ -332,6 +337,9 @@ func (t *Worker) RunJobCheck() {
 				if err != nil {
 					t.logger.Error("run job check error", err)
 				}
+			case <-t.closeSignForJobcheck:
+				t.logger.Info("JobCheck close")
+				return
 
 			}
 		}
@@ -342,7 +350,7 @@ func (t *Worker) RunForDelayQuene() {
 	t.once2.Do(func() {
 		for i := 0; i < bucketSize; i++ {
 			t.timers[i] = time.NewTicker(1 * time.Second)
-			t.closeSign[i] = make(chan int, 0)
+			t.closeSign[i] = make(chan int, 1)
 			realBucketName := fmt.Sprintf(t.bucketName, i+1)
 			t.wait.Add(1)
 			go t.DelayQueneWorker(t.timers[i], t.closeSign[i], realBucketName)

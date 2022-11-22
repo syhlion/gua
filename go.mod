@@ -12,13 +12,13 @@ require (
 	github.com/pquerna/otp v1.3.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/syhlion/glua-libs v0.0.0-20221118014540-79c50470ff02
-	github.com/syhlion/greq v1.1.1
-	github.com/syhlion/requestwork.v2 v0.0.0-20210119021838-2bc6ad110469
+	github.com/syhlion/greq v1.1.2
+	github.com/syhlion/requestwork.v2 v0.0.0-20221121064106-5982b8b66fbe
 	github.com/syhlion/restresp v0.0.0-20170323032640-7fe232e5b740
 	github.com/urfave/cli v1.22.10
 	github.com/yuin/gopher-lua v0.0.0-20220504180219-658193537a64
 	go.etcd.io/bbolt v1.3.6
-	google.golang.org/grpc v1.50.1
+	google.golang.org/grpc v1.51.0
 	google.golang.org/protobuf v1.28.1
 )
 
@@ -37,5 +37,5 @@ require (
 	golang.org/x/net v0.2.0 // indirect
 	golang.org/x/sys v0.2.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
-	google.golang.org/genproto v0.0.0-20221117204609-8f9c96812029 // indirect
+	google.golang.org/genproto v0.0.0-20221118155620-16455021b5e6 // indirect
 )
