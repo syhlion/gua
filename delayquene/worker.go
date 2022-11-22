@@ -404,7 +404,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				token, err = redis.String(conn.Do("GET", groupKey))
 				if err != nil {
 					t.bucket.Remove(realBucketName, bi.JobId)
-					t.logger.WithError(err).Errorㄑ("optToken error job %v", job)
+					t.logger.WithError(err).Errorf("optToken error job %v", job)
 					return
 				}
 			} else {
