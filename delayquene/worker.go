@@ -381,6 +381,10 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			}()
 			job, err := t.jobQuene.Get(bi.JobId)
 			if err != nil {
+				if err == redis.ErrNil {
+					t.jobQuene.Remove(bi.JobId)
+					t.logger.WithError(err).Error("jobQuene get error,remove job %s", bi.JobId)
+				}
 				t.logger.WithError(err).Error("jobQuene get error")
 				t.bucket.Remove(realBucketName, bi.JobId)
 				return

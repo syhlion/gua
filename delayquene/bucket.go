@@ -171,7 +171,7 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 			continue
 		}
 		//檢查任務是否存在
-		check, err := redis.Int(c.Do("EXISTS", key))
+		check, err := redis.Int(c.Do("EXISTS", item.JobId))
 		if check != 1 {
 			//不存在就移除bucket
 			b.Remove(key, item.JobId)
@@ -179,7 +179,7 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 			continue
 		}
 		//有經過的任務，增加任務時間
-		_, err = c.Do("SET", key+"-scan", t)
+		_, err = c.Do("SET", item.JobId+"-scan", t)
 		if err != nil {
 			return nil, err
 		}
