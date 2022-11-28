@@ -71,6 +71,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 				if err != nil {
 					b.logger.Error("redis set scan error", err)
 				}
+				b.logger.Errorf("job miss scan job %s", v+"-scan")
 				continue
 			}
 		}
@@ -153,24 +154,34 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 	items = make([]*BucketItem, 0)
 	t := time.Now().Unix()
 	for i := 0; i < len(reply); i += 2 {
+
 		item := &BucketItem{}
-		key, err := redis.String(reply[i], nil)
+		kkey, err := redis.String(reply[i], nil)
 		if err != nil {
 			return nil, err
 		}
-		//有經過的任務，增加任務時間
-		_, err = c.Do("SET", key+"-scan", t)
-		if err != nil {
-			return nil, err
-		}
+
 		//把任務解析成 item worker 執行
 		value, err := redis.Int64(reply[i+1], nil)
 		if err != nil {
 			return nil, err
 		}
-		item.JobId = key
+		item.JobId = kkey
 		if item.JobId == "" {
 			continue
+		}
+		//檢查任務是否存在
+		check, err := redis.Int(c.Do("EXISTS", key))
+		if check != 1 {
+			//不存在就移除bucket
+			b.Remove(key, item.JobId)
+			b.logger.Errorf("remove miss job in bucket jobid:%s", item.JobId)
+			continue
+		}
+		//有經過的任務，增加任務時間
+		_, err = c.Do("SET", key+"-scan", t)
+		if err != nil {
+			return nil, err
 		}
 		item.Timestamp = value
 		items = append(items, item)
