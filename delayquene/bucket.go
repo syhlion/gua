@@ -8,6 +8,8 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/sirupsen/logrus"
+	guaproto "github.com/syhlion/gua/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type BucketItem struct {
@@ -102,12 +104,37 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 
 		tlastTime := time.Unix(lastTime, 0)
 		if now.Sub(tlastTime) > 2*time.Minute {
-			err = b.Push(key, 0, "JOB"+"-"+ss[1]+"-"+ss[2])
+			/*
+				確認任務是否可以執行的
+			*/
+			jobRp, err := redis.Bytes(c.Do("GET", "JOB"+"-"+ss[1]+"-"+ss[2]))
 			if err != nil {
-				b.logger.Error("job miss but auto patch job error", "JOB"+"-"+ss[1]+"-"+ss[2], err)
+				b.logger.WithError(err).Error("jobCheck job get error")
 				return err
 			}
-			b.logger.Error("job miss and auto patch job ", "JOB"+"-"+ss[1]+"-"+ss[2])
+			jb := &guaproto.Job{}
+			err = proto.Unmarshal(jobRp, jb)
+			if err != nil {
+				b.logger.WithError(err).Error("jobCheck job unmarshal error")
+				return err
+			}
+			//任務是Active 才進行補任務
+			if jb.Active {
+				err = b.Push(key, 0, "JOB"+"-"+ss[1]+"-"+ss[2])
+				if err != nil {
+					b.logger.Error("job miss but auto patch job error", "JOB"+"-"+ss[1]+"-"+ss[2], err)
+					return err
+				}
+				b.logger.Error("job miss and auto patch job ", "JOB"+"-"+ss[1]+"-"+ss[2])
+			} else {
+
+				t := time.Now().Add(72 * time.Hour)
+				_, err = c.Do("SET", v, t.Unix())
+				if err != nil {
+					b.logger.WithError(err).Error("jobcheck set job-scan error")
+				}
+				b.logger.Error("jobcheck is not active SET time %v", t)
+			}
 
 		}
 

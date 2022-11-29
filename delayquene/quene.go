@@ -496,6 +496,7 @@ func (t *q) Active(groupName string, jobId string, exectime int64) (err error) {
 			return err
 		}
 		conn.Send("SET", jobKey, bb)
+		conn.Send("SET", jobKey+"-scan", time.Now().Unix())
 		reply, err := conn.Do("EXEC")
 		if err == nil && reply != nil {
 			t.bucket.Push(<-t.bucketNameChan, exectime, fmt.Sprintf(jobNamePrefix, job.GroupName, job.Id))
@@ -512,7 +513,6 @@ func (t *q) Pause(groupName string, jobId string) (err error) {
 		jobKey := fmt.Sprintf(jobNamePrefix, groupName, jobId)
 		_, err := conn.Do("WATCH", jobKey)
 		if err != nil {
-			fmt.Println("gg", jobKey)
 			return err
 		}
 		b, err := redis.Bytes(conn.Do("GET", jobKey))
