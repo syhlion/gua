@@ -7,10 +7,10 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/proto"
 	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
 	"github.com/pquerna/otp/totp"
@@ -20,10 +20,13 @@ import (
 	"github.com/syhlion/gua/migrate"
 	guaproto "github.com/syhlion/gua/proto"
 	"github.com/syhlion/restresp"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
-	logger *logrus.Logger
+	logger  *logrus.Logger
+	jobRe   = regexp.MustCompile(`^([a-zA-Z0-9_]+)$`)
+	groupRe = regexp.MustCompile(`^([a-zA-Z0-9_]+)$`)
 )
 
 func SetLogger(l *logrus.Logger) {
@@ -259,6 +262,14 @@ func RegisterGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if !groupRe.MatchString(payload.GroupName) {
+			restresp.Write(w, "groupname illegal", http.StatusBadRequest)
+			return
+		}
+		if len([]rune(payload.GroupName)) > 22 {
+			restresp.Write(w, "groupname too long", http.StatusBadRequest)
+			return
+		}
 		otp, err := quene.RegisterGroup(payload.GroupName)
 		if err != nil {
 			logger.Warnf("RegisterGroup Error: %v", err)
@@ -325,6 +336,7 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 
 		payload := &AddJobPayload{}
 		err = json.Unmarshal(body, payload)
+		var jobId string
 		if err != nil {
 			logger.Warnf("Error json umnarsal: %v", err)
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
@@ -350,10 +362,32 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 			restresp.Write(w, "payload no group_name", http.StatusBadRequest)
 			return
 		}
+		exists, err := quene.ExistsGroup(payload.GroupName)
+		if err != nil {
+			restresp.Write(w, "exists group err", http.StatusBadRequest)
+			return
+		}
+		if exists != 1 {
+			restresp.Write(w, "no group", http.StatusBadRequest)
+			return
+		}
+		if payload.JobId == "" {
+			jobId = quene.GenerateUID()
+		} else {
+			jobId = payload.JobId
+		}
+		if !jobRe.MatchString(jobId) {
+			restresp.Write(w, "jobid illegal", http.StatusBadRequest)
+			return
+		}
+		if len([]rune(jobId)) > 22 {
+			restresp.Write(w, "jobid too long", http.StatusBadRequest)
+			return
+		}
 		job := &guaproto.Job{
 			Name:            payload.Name,
 			GroupName:       payload.GroupName,
-			Id:              quene.GenerateUID(),
+			Id:              jobId,
 			Exectime:        payload.Exectime,
 			Timeout:         payload.Timeout,
 			IntervalPattern: payload.IntervalPattern,

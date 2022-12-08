@@ -1,6 +1,7 @@
 package delayquene
 
 import (
+	"errors"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -23,8 +24,22 @@ func (j *JobQuene) Get(key string) (jb *guaproto.Job, err error) {
 	err = proto.Unmarshal(reply, jb)
 	return
 }
+func (j *JobQuene) Exist(key string) (duplicate int, err error) {
 
+	c := j.rpool.Get()
+	defer c.Close()
+
+	return redis.Int(c.Do("EXISTS", key))
+}
 func (j *JobQuene) Add(key string, jb *guaproto.Job) (err error) {
+	duplicate, err := j.Exist(key)
+	if err != nil {
+		return
+	}
+	if duplicate == 1 {
+		err = errors.New("key duplicate")
+		return
+	}
 	b, err := proto.Marshal(jb)
 	if err != nil {
 		return

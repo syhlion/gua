@@ -22,7 +22,7 @@ Body:
 
 ```
 {
-  "group_name": "YM55",
+  "group_name": "YM55", //rule: [a-zA-Z0-9_]{1,22}
 }
 ```
 
@@ -42,7 +42,7 @@ Body:
 
 ```
 {
-  "group_name": "YM55",
+  "group_name": "YM55", 
 }
 ```
 
@@ -60,13 +60,16 @@ $ curl -d "@remove_group.json" -X POST http://{{yourhost}}/v1/remove/group
 Body:
 
 [http.json](./testdata/http.json)
+[httpbyjobid.json](./testdata/httpbyjobid.json)
+[httponce.json](./testdata/httponce.json)
 
 ```
 {
-  "group_name": "YM55",
-  "name": "Hello",
+  "group_name": "YM55", //required
+  "name": "Hello",  //required
+  "job_id":"1234ABC", //option  you can specify your job_id rule: [a-zA-Z0-9_]{1,22}
   "exec_time": 0, //unixtime. if exec_time == 0 exec now
-  "request_url": "HTTP@http://127.0.0.1:9999?test=yao", //prefix REMOTE|LUA|HTTP
+  "request_url": "HTTP@http://127.0.0.1:9999?test=yao", //required prefix REMOTE|LUA|HTTP
   "interval_pattern": "@once", //use crontab schema or @once or @every 5s
   "exec_command": "",
   "timeout": 1,

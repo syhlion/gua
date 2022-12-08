@@ -8,6 +8,7 @@ type EditJobPayload struct {
 }
 type AddJobPayload struct {
 	GroupName       string `json:"group_name"`
+	JobId           string `json:"job_id"`
 	Name            string `json:"name"`
 	Exectime        int64  `json:"exec_time"`
 	RequestUrl      string `json:"request_url"`

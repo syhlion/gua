@@ -34,8 +34,8 @@ var bucketNamePrefix = "BUCKET-[%s-%s]"
 // JOB-{groupName}-{jobId}
 var jobNamePrefix = "JOB-%s-%s"
 var re = regexp.MustCompile(`^SERVER-(\d+)$`)
-var jobCheckRe = regexp.MustCompile(`^JOB-(.+)-(\d+)-scan$`)
-var jobRe = regexp.MustCompile(`^JOB-(.+)-(\d+)$`)
+var jobCheckRe = regexp.MustCompile(`^JOB-([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)-scan$`)
+var jobRe = regexp.MustCompile(`^JOB-([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)$`)
 var UrlRe = regexp.MustCompile(`^(HTTP|REMOTE|LUA)\@(.+)?`)
 
 type servers []string
@@ -274,6 +274,7 @@ type Quene interface {
 	GroupInfo(groupName string) (s string, err error)
 	Close()
 	RemoveGroup(groupName string) (err error)
+	ExistsGroup(groupName string) (exists int, err error)
 }
 
 type q struct {
@@ -653,5 +654,13 @@ func (t *q) RemoveGroup(groupName string) (err error) {
 
 	groupKey := fmt.Sprintf("USER_%s", groupName)
 	_, err = conn.Do("DEL", groupKey)
+	return
+}
+func (t *q) ExistsGroup(groupName string) (exists int, err error) {
+	conn := t.urpool.Get()
+	defer conn.Close()
+
+	groupKey := fmt.Sprintf("USER_%s", groupName)
+	exists, err = redis.Int(conn.Do("EXISTS", groupKey))
 	return
 }
