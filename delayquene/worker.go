@@ -52,16 +52,22 @@ type Worker struct {
 }
 
 func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
-	execTime := time.Now().Unix()
+	execTime := time.Now()
+	planTime := time.Unix(job.PlanTime, 0)
 	var finishTime int64
 	var cmdType string
 	var resp string
 	defer func() {
+		fTime := time.Now()
+		st := planTime.Sub(fTime)
+		if st > 1*time.Second {
+			t.logger.Error("job-delay finsh ready quene. job: %v. delay time: %v", job, st)
+		}
 		//如沒設定 reply hook 不執行
 		if t.jobReplyUrl != "" {
 
 			payload := &loghook.Payload{
-				ExecTime:           execTime,
+				ExecTime:           execTime.Unix(),
 				FinishTime:         finishTime,
 				PlanTime:           job.PlanTime,
 				GetJobTime:         job.GetJobTime,
@@ -90,7 +96,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 
 		}
 		t.logger.WithFields(logrus.Fields{
-			"Exectime":           execTime,
+			"Exectime":           execTime.Unix(),
 			"FinishTime":         finishTime,
 			"PlanTime":           job.PlanTime,
 			"GetJobTime":         job.GetJobTime,
@@ -108,6 +114,10 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	}()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
 
+	st := planTime.Sub(execTime)
+	if st > 1*time.Second {
+		t.logger.Error("job-delay receive ready quene. job: %v. delay time: %v", job, st)
+	}
 	cmdType = ss[1]
 	switch cmdType {
 	case "HTTP":
@@ -213,7 +223,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 				Fn:      r,
 				NRet:    1,
 				Protect: true,
-			}, lua.LString(job.Id), lua.LString(job.GroupName), lua.LNumber(job.PlanTime), lua.LNumber(execTime))
+			}, lua.LString(job.Id), lua.LString(job.GroupName), lua.LNumber(job.PlanTime), lua.LNumber(execTime.Unix()))
 
 			t.lpool.Put(l)
 			if err != nil {
@@ -279,7 +289,7 @@ func (t *Worker) Close() {
 }
 func (t *Worker) RunForReadQuene() {
 	t.once1.Do(func() {
-		for i := 0; i < bucketSize; i++ {
+		for i := 0; i < bucketSize*2; i++ {
 			go t.ReadyQueneWorker()
 		}
 
@@ -435,6 +445,12 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				t.bucket.Remove(realBucketName, bi.JobId)
 				t.logger.WithError(err).Error("push to ready quene marshal error job %v", job)
 				return
+			}
+			//check delay
+			planTime := time.Unix(job.Exectime, 0)
+			st := planTime.Sub(ti)
+			if st > 1*time.Second {
+				t.logger.Error("job-delay push ready quene. job: %v. delay time: %v", job, st)
 			}
 			c := t.rpool.Get()
 			_, err = c.Do("RPUSH", "GUA-READY-JOB", b)
