@@ -114,7 +114,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	}()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
 
-	st := execTime.Sub(planeTime)
+	st := execTime.Sub(planTime)
 	if st > 1*time.Second {
 		t.logger.Error("job-delay receive ready quene. job: %v. delay time: %v", job, st)
 	}
