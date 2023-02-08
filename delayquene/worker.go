@@ -59,7 +59,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	var resp string
 	defer func() {
 		fTime := time.Now()
-		st := planTime.Sub(fTime)
+		st := fTime.Sub(planTime)
 		if st > 1*time.Second {
 			t.logger.Error("job-delay finsh ready quene. job: %v. delay time: %v", job, st)
 		}
@@ -114,7 +114,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	}()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
 
-	st := planTime.Sub(execTime)
+	st := execTime.Sub(planeTime)
 	if st > 1*time.Second {
 		t.logger.Error("job-delay receive ready quene. job: %v. delay time: %v", job, st)
 	}
@@ -448,7 +448,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			}
 			//check delay
 			planTime := time.Unix(job.Exectime, 0)
-			st := planTime.Sub(ti)
+			st := ti.Sub(planTime)
 			if st > 1*time.Second {
 				t.logger.Error("job-delay push ready quene. job: %v. delay time: %v", job, st)
 			}
