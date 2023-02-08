@@ -289,7 +289,7 @@ func (t *Worker) Close() {
 }
 func (t *Worker) RunForReadQuene() {
 	t.once1.Do(func() {
-		for i := 0; i < bucketSize*2; i++ {
+		for i := 0; i < bucketSize*3; i++ {
 			go t.ReadyQueneWorker()
 		}
 
