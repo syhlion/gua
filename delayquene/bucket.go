@@ -85,7 +85,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 	}
 	for _, v := range replys {
 		//檢查是否有多餘的點查並且刪除除除除除除
-		t := strings.Trim(v, "-scan")
+		t := strings.TrimSuffix(v, "-scan")
 		_, err := redis.Bytes(c.Do("GET", t))
 		if err == redis.ErrNil {
 			_, err := c.Do("DEL", v)
