@@ -61,7 +61,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 		fTime := time.Now()
 		st := fTime.Sub(planTime)
 		if st > 1*time.Second {
-			t.logger.Error("job-delay finsh ready quene. job: %v. delay time: %v", job, st)
+			t.logger.Errorf("job-delay finsh ready quene. job: %v. delay time: %v", job, st)
 		}
 		//如沒設定 reply hook 不執行
 		if t.jobReplyUrl != "" {
@@ -116,7 +116,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 
 	st := execTime.Sub(planTime)
 	if st > 1*time.Second {
-		t.logger.Error("job-delay receive ready quene. job: %v. delay time: %v", job, st)
+		t.logger.Errorf("job-delay receive ready quene. job: %v. delay time: %v", job, st)
 	}
 	cmdType = ss[1]
 	switch cmdType {
@@ -450,7 +450,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			planTime := time.Unix(job.Exectime, 0)
 			st := ti.Sub(planTime)
 			if st > 1*time.Second {
-				t.logger.Error("job-delay push ready quene. job: %v. delay time: %v", job, st)
+				t.logger.Errorf("job-delay push ready quene. job: %v. delay time: %v", job, st)
 			}
 			c := t.rpool.Get()
 			_, err = c.Do("RPUSH", "GUA-READY-JOB", b)
