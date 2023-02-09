@@ -465,8 +465,9 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			if st > 2*time.Second {
 				t.logger.WithFields(
 					logrus.Fields{
-						"delay_time": st,
-					}).Errorf("job-delay push ready quene. job: %v.", job)
+						"delay_time": fmt.Sprintf("%v", st),
+						"job":        fmt.Sprintf("%v", job),
+					}).Errorf("job-delay push ready quene.")
 			}
 
 			//remove bucket
