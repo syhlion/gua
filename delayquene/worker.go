@@ -468,11 +468,6 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 						"delay_time": st,
 					}).Errorf("job-delay push ready quene. job: %v.", job)
 			}
-			t.logger.WithFields(
-				logrus.Fields{
-					"delay_time": fmt.Sprintf("%v", st),
-					"job":        fmt.Sprintf("%v", job),
-				}).Error("job-delay push ready quene.")
 
 			//remove bucket
 			t.bucket.Remove(realBucketName, bi.JobId)
