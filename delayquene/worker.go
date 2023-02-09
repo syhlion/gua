@@ -60,7 +60,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	defer func() {
 		fTime := time.Now()
 		st := fTime.Sub(planTime)
-		if st > 1*time.Second {
+		if st > 2*time.Second {
 			t.logger.Errorf("job-delay finsh ready quene. job: %v. delay time: %v", job, st)
 		}
 		//如沒設定 reply hook 不執行
@@ -115,7 +115,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
 
 	st := execTime.Sub(planTime)
-	if st > 1*time.Second {
+	if st > 2*time.Second {
 		t.logger.Errorf("job-delay receive ready quene. job: %v. delay time: %v", job, st)
 	}
 	cmdType = ss[1]
@@ -454,7 +454,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			//check delay
 			planTime := time.Unix(job.Exectime, 0)
 			st := ti.Sub(planTime)
-			if st > 1*time.Second {
+			if st > 2*time.Second {
 				t.logger.Errorf("job-delay push ready quene. job: %v. delay time: %v", job, st)
 			}
 
