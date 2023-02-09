@@ -248,7 +248,7 @@ func (t *Worker) ReadyQueneWorker() {
 			var data []byte
 
 			//這邊會block住 等收訊息
-			reply, err := redis.Values(c.Do("BLPOP", "GUA-READY-JOB", 0))
+			reply, err := redis.Values(c.Do("BLPOP", "GUA-READY-JOB", 30))
 			if err != nil {
 				//有可能因為timeout error  重新取一再跑一次迴圈
 				t.logger.WithError(err).Errorf("ready quenen redis receive fail")
@@ -289,7 +289,7 @@ func (t *Worker) Close() {
 }
 func (t *Worker) RunForReadQuene() {
 	t.once1.Do(func() {
-		for i := 0; i < bucketSize*3; i++ {
+		for i := 0; i < bucketSize*6; i++ {
 			go t.ReadyQueneWorker()
 		}
 
