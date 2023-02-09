@@ -31,6 +31,31 @@ func (j *JobQuene) Exist(key string) (duplicate int, err error) {
 
 	return redis.Int(c.Do("EXISTS", key))
 }
+func (j *JobQuene) Update(key string, jb *guaproto.Job) (err error) {
+	b, err := proto.Marshal(jb)
+	if err != nil {
+		return
+	}
+	c := j.rpool.Get()
+	defer c.Close()
+	var i = 0
+	var check = 0
+	t := time.NewTimer(100 * time.Millisecond)
+	for {
+		//確認是否有鎖
+		check, err = redis.Int(c.Do("GET", "JOBCHECKLOCK"))
+		if check == 0 || i >= 10 {
+			break
+		}
+		<-t.C
+		t.Reset(100 * time.Millisecond)
+		i++
+
+	}
+	_, err = c.Do("SET", key, b)
+	_, err = c.Do("SET", key+"-scan", time.Now().Unix())
+	return
+}
 func (j *JobQuene) Add(key string, jb *guaproto.Job) (err error) {
 	duplicate, err := j.Exist(key)
 	if err != nil {

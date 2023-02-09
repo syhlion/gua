@@ -382,9 +382,6 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			var err error
 			defer func() {
 				if err != nil {
-					//t.bucket.Remove(realBucketName, bi.JobId)
-					//auto push
-					//t.bucket.Push(<-t.bucketNameChan, time.Now().Unix(), bi.JobId)
 
 					t.logger.WithError(err).Errorf("job bucket has error")
 				}
@@ -446,12 +443,6 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				t.logger.WithError(err).Error("push to ready quene marshal error job %v", job)
 				return
 			}
-			//check delay
-			planTime := time.Unix(job.Exectime, 0)
-			st := ti.Sub(planTime)
-			if st > 1*time.Second {
-				t.logger.Errorf("job-delay push ready quene. job: %v. delay time: %v", job, st)
-			}
 			c := t.rpool.Get()
 			_, err = c.Do("RPUSH", "GUA-READY-JOB", b)
 			if err != nil {
@@ -460,6 +451,13 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			}
 			c.Close()
 
+			//check delay
+			planTime := time.Unix(job.Exectime, 0)
+			st := ti.Sub(planTime)
+			if st > 1*time.Second {
+				t.logger.Errorf("job-delay push ready quene. job: %v. delay time: %v", job, st)
+			}
+
 			//remove bucket
 			t.bucket.Remove(realBucketName, bi.JobId)
 			if job.IntervalPattern != "@once" {
@@ -467,9 +465,11 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				job.Exectime = sch.Next(ti).Unix()
 				t.jobQuene.Add(bi.JobId, job)
 				t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
+				t.jobQuene.Update(bi.JobId, job)
 			} else {
 				t.jobQuene.Remove(bi.JobId)
 			}
+
 		}()
 	}
 
