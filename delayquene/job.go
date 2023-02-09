@@ -53,7 +53,6 @@ func (j *JobQuene) Update(key string, jb *guaproto.Job) (err error) {
 
 	}
 	_, err = c.Do("SET", key, b)
-	_, err = c.Do("SET", key+"-scan", time.Now().Unix())
 	return
 }
 func (j *JobQuene) Add(key string, jb *guaproto.Job) (err error) {
