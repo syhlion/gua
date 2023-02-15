@@ -275,11 +275,13 @@ func (t *Worker) ReadyQueneWorker() {
 				t.logger.WithError(err).Errorf("proto unmarshal error")
 				return
 			}
-			err = t.ExecuteJob(job)
-			if err != nil {
-				t.logger.WithError(err).Errorf("exec job error")
-				return
-			}
+			go func() {
+				err = t.ExecuteJob(job)
+				if err != nil {
+					t.logger.WithError(err).Errorf("exec job error")
+					return
+				}
+			}()
 		}()
 
 	}
@@ -300,7 +302,7 @@ func (t *Worker) Close() {
 }
 func (t *Worker) RunForReadQuene() {
 	t.once1.Do(func() {
-		for i := 0; i < bucketSize*3; i++ {
+		for i := 0; i < bucketSize; i++ {
 			go t.ReadyQueneWorker()
 		}
 
@@ -370,7 +372,7 @@ func (t *Worker) RunJobCheck() {
 func (t *Worker) RunForDelayQuene() {
 	t.once2.Do(func() {
 		for i := 0; i < bucketSize; i++ {
-			t.timers[i] = time.NewTicker(1 * time.Second)
+			t.timers[i] = time.NewTicker(500 * time.Millisecond)
 			t.closeSign[i] = make(chan int, 1)
 			realBucketName := fmt.Sprintf(t.bucketName, i+1)
 			t.wait.Add(1)
@@ -389,7 +391,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 		if bi.Timestamp > ti.Unix() {
 			return
 		}
-		func() {
+		go func(bi *BucketItem, ti time.Time, realBucketName string) {
 			var err error
 			defer func() {
 				if err != nil {
@@ -454,13 +456,14 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				t.logger.WithError(err).Error("push to ready quene marshal error job %v", job)
 				return
 			}
+
 			c := t.rpool.Get()
 			_, err = c.Do("RPUSH", "GUA-READY-JOB", b)
+			c.Close()
 			if err != nil {
 				t.logger.WithError(err).Errorf("push to ready redis error job %v", job)
 				return
 			}
-			c.Close()
 
 			//check delay
 			planTime := time.Unix(job.Exectime, 0)
@@ -485,7 +488,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				t.jobQuene.Remove(bi.JobId)
 			}
 
-		}()
+		}(bi, ti, realBucketName)
 	}
 
 	return
