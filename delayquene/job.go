@@ -84,8 +84,10 @@ func (j *JobQuene) Add(key string, jb *guaproto.Job) (err error) {
 		i++
 
 	}
-	_, err = c.Do("SET", key, b)
-	_, err = c.Do("SET", key+"-scan", time.Now().Unix())
+	c.Send("SET", key, b)
+	c.Send("SET", key+"-scan", time.Now().Unix())
+	c.Flush()
+	_, err = c.Receive()
 	return
 }
 func (j *JobQuene) Remove(key string) (err error) {
@@ -106,8 +108,10 @@ func (j *JobQuene) Remove(key string) (err error) {
 		i++
 
 	}
-	_, err = c.Do("DEL", key)
-	_, err = c.Do("DEL", key+"-scan")
+	c.Send("DEL", key)
+	c.Send("DEL", key+"-scan")
+	c.Flush()
+	_, err = c.Receive()
 	return
 }
 func (j *JobQuene) List(key string) (jobs []*guaproto.Job, err error) {

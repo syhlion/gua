@@ -300,7 +300,7 @@ func (t *Worker) Close() {
 }
 func (t *Worker) RunForReadQuene() {
 	t.once1.Do(func() {
-		for i := 0; i < bucketSize*6; i++ {
+		for i := 0; i < bucketSize*3; i++ {
 			go t.ReadyQueneWorker()
 		}
 
@@ -414,8 +414,8 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			}
 
 			if job.Exectime > ti.Unix() {
-				t.bucket.Remove(realBucketName, bi.JobId)
-				t.bucket.Push(<-t.bucketNameChan, job.Exectime, bi.JobId)
+				t.bucket.RemoveAndPush(realBucketName, <-t.bucketNameChan, bi.JobId, job.Exectime)
+
 				return
 			}
 			var token string

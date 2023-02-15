@@ -152,7 +152,13 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 }
 func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 	c := b.rpool.Get()
+	t := time.Now().Unix()
 	defer func() {
+		for _, i := range items {
+			c.Send("SET", i.JobId+"-scan", t)
+
+		}
+		c.Flush()
 		b.lock.RLock()
 		defer b.lock.RUnlock()
 		if b.stopFlag == 1 {
@@ -164,12 +170,9 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 			return
 		}
 		b.logger.Infof("GET New Server:%s Merge to %s Start", downBucket, key)
-		_, err = c.Do("ZUNIONSTORE", key, 2, key, downBucket, "WEIGHTS", 1, 1, "AGGREGATE", "MIN")
-		if err != nil {
-			c.Close()
-			return
-		}
-		c.Do("DEL", downBucket)
+		c.Send("ZUNIONSTORE", key, 2, key, downBucket, "WEIGHTS", 1, 1, "AGGREGATE", "MIN")
+		c.Send("DEL", downBucket)
+		c.Flush()
 		c.Close()
 		b.logger.Infof("GET New Server:%s Merge to %s Finish", downBucket, key)
 	}()
@@ -179,7 +182,6 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 		return
 	}
 	items = make([]*BucketItem, 0)
-	t := time.Now().Unix()
 	for i := 0; i < len(reply); i += 2 {
 
 		item := &BucketItem{}
@@ -197,31 +199,36 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 		if item.JobId == "" {
 			continue
 		}
-		//檢查任務是否存在
-		check, err := redis.Int(c.Do("EXISTS", item.JobId))
-		if check != 1 {
-			//不存在就移除bucket
-			b.Remove(key, item.JobId)
-			b.logger.Errorf("remove miss job in bucket jobid:%s", item.JobId)
-			continue
-		}
-		//有經過的任務，增加任務時間
-		_, err = c.Do("SET", item.JobId+"-scan", t)
-		if err != nil {
-			return nil, err
-		}
+
 		item.Timestamp = value
 		items = append(items, item)
 	}
 	return
 
 }
+
 func (b *Bucket) Remove(key string, jobId string) (err error) {
 	c := b.rpool.Get()
 	defer c.Close()
 	_, err = c.Do("ZREM", key, jobId)
 	return
 
+}
+func (b *Bucket) RemoveAndPush(removeKey string, puahKey string, jobId string, timestamp int64) (err error) {
+	c := b.rpool.Get()
+	defer c.Close()
+	c.Send("ZREM", removeKey, jobId)
+	c.Send("ZADD", puahKey, timestamp, jobId)
+	c.Flush()
+	_, err = c.Receive()
+	if err != nil {
+		b.logger.Errorf("bucket push error %s", err)
+	}
+	_, err = c.Receive()
+	if err != nil {
+		b.logger.Errorf("bucket push error %s", err)
+	}
+	return
 }
 func (b *Bucket) Close() {
 	b.lock.Lock()

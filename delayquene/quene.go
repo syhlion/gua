@@ -26,7 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const bucketSize = 80
+const bucketSize = 50
 
 // bucket-{uuid}-{[0-9]}
 var bucketNamePrefix = "BUCKET-[%s-%s]"
