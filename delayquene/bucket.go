@@ -65,80 +65,92 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 	//先檢查是否有有JOB 但沒有scan的JOB
 
 	replysJob, err := RedisScan(c, "JOB-*")
+	var args []interface{}
 	for _, v := range replysJob {
 		if jobRe.MatchString(v) {
-			_, err := redis.Int64(c.Do("GET", v+"-scan"))
-			if err == redis.ErrNil {
-				_, err := c.Do("SET", v+"-scan", time.Now().Unix())
-				if err != nil {
-					b.logger.Error("redis set scan error", err)
-				}
-				b.logger.Errorf("job miss scan job %s", v+"-scan")
-				continue
-			}
+			//先蒐集符合的key
+			args = append(args, v+"-scan")
+
 		}
 	}
+	//透過MGET 一次把資料拉出來
+	values, err := redis.Strings(c.Do("MGET", args...))
+	for i, v := range values {
+		if v != "" {
+			//用pipline的方式 更新時間
+			c.Send("SET", args[i], now.Unix())
+		} else {
+			b.logger.Errorf("job miss scan job %s", v+"-scan")
+		}
+	}
+	c.Flush()
 
 	replys, err := RedisScan(c, "JOB-*-scan")
 	if err != nil {
 		return err
 	}
+	var scanJob []interface{}
+	var job []interface{}
+	var jobName []interface{}
+	//檢查是否有多餘的點查並且刪除
 	for _, v := range replys {
-		//檢查是否有多餘的點查並且刪除除除除除除
 		t := strings.TrimSuffix(v, "-scan")
-		_, err := redis.Bytes(c.Do("GET", t))
-		if err == redis.ErrNil {
-			_, err := c.Do("DEL", v)
-			if err != nil {
-				b.logger.Error("job miss main job redis error:", err)
-			}
-			b.logger.Errorf("job miss main job %s", t)
-			continue
-		}
-		//開始檢查是否有遺失的任務
-		lastTime, err := redis.Int64(c.Do("GET", v))
-		if err != nil {
-			return err
-		}
+		job = append(job, t)
+		scanJob = append(scanJob, v)
 		ss := jobCheckRe.FindStringSubmatch(v)
+		jobName = append(jobName, "JOB"+"-"+ss[1]+"-"+ss[2])
+	}
+	jobs, err := redis.ByteSlices(c.Do("MGET", job...))
+	if err != nil {
+		return err
+	}
+	for _, v := range jobs {
+		if v == nil {
+			c.Send("DEL", v)
+		} else {
+			b.logger.Errorf("job miss main job %s", t)
+		}
+	}
+	c.Flush()
 
-		tlastTime := time.Unix(lastTime, 0)
+	scanJobTime, err := redis.Int64s(c.Do("MGET", scanJob...))
+	if err != nil {
+		return err
+	}
+	jobDatas, err := redis.ByteSlices(c.Do("MGET", jobName...))
+	if err != nil {
+		return err
+	}
+	for i, v := range scanJobTime {
+		tlastTime := time.Unix(v, 0)
 		if now.Sub(tlastTime) > 2*time.Minute {
-			/*
-				確認任務是否可以執行的
-			*/
-			jobRp, err := redis.Bytes(c.Do("GET", "JOB"+"-"+ss[1]+"-"+ss[2]))
-			if err != nil {
-				b.logger.WithError(err).Error("jobCheck job get error")
-				return err
-			}
+
 			jb := &guaproto.Job{}
-			err = proto.Unmarshal(jobRp, jb)
+			err = proto.Unmarshal(jobDatas[i], jb)
 			if err != nil {
 				b.logger.WithError(err).Error("jobCheck job unmarshal error")
 				return err
 			}
 			//任務是Active 才進行補任務
 			if jb.Active {
-				err = b.Push(key, 0, "JOB"+"-"+ss[1]+"-"+ss[2])
+				err = b.Push(key, 0, jb.Id)
 				if err != nil {
-					b.logger.Error("job miss but auto patch job error", "JOB"+"-"+ss[1]+"-"+ss[2], err)
+					b.logger.Error("job miss but auto patch job error", jb.Id, err)
 					return err
 				}
-				b.logger.Error("job miss and auto patch job ", "JOB"+"-"+ss[1]+"-"+ss[2])
+				b.logger.Error("job miss and auto patch job ", jb.Id)
 			} else {
 
 				t := time.Now().Add(72 * time.Hour)
-				_, err = c.Do("SET", v, t.Unix())
+				_, err = c.Do("SET", jb.Id+"-scan", t.Unix())
 				if err != nil {
 					b.logger.WithError(err).Error("jobcheck set job-scan error")
 				}
 				b.logger.Error("jobcheck is not active SET time %v", t)
 			}
-
 		}
-
 	}
+
 	jobCheckEnd := time.Now()
 	b.logger.WithFields(logrus.Fields{
 		"jobcheck_start_lock":  now,
@@ -154,27 +166,31 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 	c := b.rpool.Get()
 	t := time.Now().Unix()
 	defer func() {
-		for _, i := range items {
-			c.Send("SET", i.JobId+"-scan", t)
-
-		}
-		c.Flush()
+		c.Close()
 		b.lock.RLock()
 		defer b.lock.RUnlock()
 		if b.stopFlag == 1 {
 			return
 		}
-		downBucket, err := redis.String(c.Do("LPOP", "down-server"))
-		if err != nil {
-			c.Close()
-			return
-		}
-		b.logger.Infof("GET New Server:%s Merge to %s Start", downBucket, key)
-		c.Send("ZUNIONSTORE", key, 2, key, downBucket, "WEIGHTS", 1, 1, "AGGREGATE", "MIN")
-		c.Send("DEL", downBucket)
-		c.Flush()
-		c.Close()
-		b.logger.Infof("GET New Server:%s Merge to %s Finish", downBucket, key)
+		//檢查是否有其他server 遺落的任務 & 對於經過的任務增加檢核時間點
+		go func() {
+			cc := b.rpool.Get()
+			defer cc.Close()
+			for _, i := range items {
+				c.Send("SET", i.JobId+"-scan", t)
+
+			}
+			downBucket, err := redis.String(cc.Do("LPOP", "down-server"))
+			if err != nil {
+				c.Close()
+				return
+			}
+			b.logger.Infof("GET New Server:%s Merge to %s Start", downBucket, key) //經過的job 增加 job-scan 時間
+			cc.Send("ZUNIONSTORE", key, 2, key, downBucket, "WEIGHTS", 1, 1, "AGGREGATE", "MIN")
+			cc.Send("DEL", downBucket)
+			cc.Flush()
+			b.logger.Infof("GET New Server:%s Merge to %s Finish", downBucket, key)
+		}()
 	}()
 
 	reply, err := redis.Values(c.Do("ZRANGE", key, 0, -1, "WITHSCORES"))
