@@ -62,29 +62,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 	}
 	jobCheckStart := time.Now()
 
-	//先檢查是否有有JOB 但沒有scan的JOB
-
-	replysJob, err := RedisScan(c, "JOB-*")
-	var args []interface{}
-	for _, v := range replysJob {
-		if jobRe.MatchString(v) {
-			//先蒐集符合的key
-			args = append(args, v+"-scan")
-
-		}
-	}
-	//透過MGET 一次把資料拉出來
-	values, err := redis.Strings(c.Do("MGET", args...))
-	for i, v := range values {
-		if v != "" {
-			//用pipline的方式 更新時間
-			c.Send("SET", args[i], now.Unix())
-		} else {
-			b.logger.Errorf("job miss scan job %s", v+"-scan")
-		}
-	}
-	c.Flush()
-
+	//檢查是否有 *-scan 檢查點，但是任務遺失的情況
 	replys, err := RedisScan(c, "JOB-*-scan")
 	if err != nil {
 		return err
@@ -104,15 +82,15 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 	if err != nil {
 		return err
 	}
-	for _, v := range jobs {
+	for i, v := range jobs {
 		if v == nil {
-			c.Send("DEL", v)
-		} else {
-			b.logger.Errorf("job miss main job %s", t)
+			c.Send("DEL", job[i])
+			b.logger.Errorf("job miss main job %s", job[i])
 		}
 	}
 	c.Flush()
 
+	//檢查是否有超時沒有進入bucket的任務 依據條件進行任務啟動
 	scanJobTime, err := redis.Int64s(c.Do("MGET", scanJob...))
 	if err != nil {
 		return err
@@ -146,7 +124,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 				if err != nil {
 					b.logger.WithError(err).Error("jobcheck set job-scan error")
 				}
-				b.logger.Error("jobcheck is not active SET time %v", t)
+				b.logger.Error("jobcheck is not active SET time %v", jobDatas[i])
 			}
 		}
 	}
@@ -174,14 +152,16 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 		}
 		//檢查是否有其他server 遺落的任務 & 對於經過的任務增加檢核時間點
 		go func() {
+
 			cc := b.rpool.Get()
 			defer cc.Close()
 			for _, i := range items {
-				c.Send("SET", i.JobId+"-scan", t)
-
+				cc.Send("SET", i.JobId+"-scan", t)
 			}
+			//cc.Flush()
 			downBucket, err := redis.String(cc.Do("LPOP", "down-server"))
 			if err != nil {
+
 				c.Close()
 				return
 			}
