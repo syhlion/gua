@@ -124,7 +124,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 				if err != nil {
 					b.logger.WithError(err).Error("jobcheck set job-scan error")
 				}
-				b.logger.Errorf("jobcheck is not active SET time %v", jobDatas[i])
+				b.logger.Errorf("jobcheck is not active SET time %v", jb)
 			}
 		}
 	}
