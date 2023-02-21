@@ -58,14 +58,32 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	var cmdType string
 	var resp string
 	defer func() {
-		fTime := time.Now()
-		st := fTime.Sub(planTime)
-		if st > 2*time.Second {
-			t.logger.WithFields(
-				logrus.Fields{
-					"delay_time": fmt.Sprintf("%v", st),
-					"job":        fmt.Sprintf("%v", job),
-				}).Error("job-delay finsh ready quene.")
+		if err == nil {
+			fTime := time.Now()
+			st := fTime.Sub(planTime)
+			if st > 2*time.Second {
+				t.logger.WithFields(
+					logrus.Fields{
+						"delay_time": fmt.Sprintf("%v", st),
+						"job":        fmt.Sprintf("%v", job),
+					}).Error("job-delay finsh ready quene.")
+			}
+
+			t.logger.WithFields(logrus.Fields{
+				"Exectime":           execTime.Unix(),
+				"FinishTime":         finishTime,
+				"PlanTime":           job.PlanTime,
+				"GetJobTime":         job.GetJobTime,
+				"JobId":              job.Id,
+				"Type":               cmdType,
+				"GetJobMachineHost":  job.GetJobMachineHost,
+				"GetJobMachineIp":    job.GetJobMachineIp,
+				"GetJobMachineMac":   job.GetJobMachineMac,
+				"ExecJobMachineHost": t.machineHost,
+				"ExecJobMachineMac":  t.machineMac,
+				"ExecJobMachineIp":   t.machineIp,
+				"GroupName":          job.GroupName,
+			}).Info("Job Send Finish")
 		}
 		//如沒設定 reply hook 不執行
 		if t.jobReplyUrl != "" {
@@ -99,21 +117,6 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 			}
 
 		}
-		t.logger.WithFields(logrus.Fields{
-			"Exectime":           execTime.Unix(),
-			"FinishTime":         finishTime,
-			"PlanTime":           job.PlanTime,
-			"GetJobTime":         job.GetJobTime,
-			"JobId":              job.Id,
-			"Type":               cmdType,
-			"GetJobMachineHost":  job.GetJobMachineHost,
-			"GetJobMachineIp":    job.GetJobMachineIp,
-			"GetJobMachineMac":   job.GetJobMachineMac,
-			"ExecJobMachineHost": t.machineHost,
-			"ExecJobMachineMac":  t.machineMac,
-			"ExecJobMachineIp":   t.machineIp,
-			"GroupName":          job.GroupName,
-		}).Info("Job Send Finish")
 
 	}()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
