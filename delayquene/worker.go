@@ -358,11 +358,13 @@ func (t *Worker) RunJobCheck() {
 		timer := time.NewTicker(time.Duration(r) * time.Second)
 		for {
 			select {
-			case tt := <-timer.C:
-				err := t.bucket.JobCheck(<-t.bucketNameChan, tt, t.machineHost)
-				if err != nil {
-					t.logger.Error("run job check error", err)
-				}
+			case <-timer.C:
+				/*
+					err := t.bucket.JobCheck(<-t.bucketNameChan, tt, t.machineHost)
+					if err != nil {
+						t.logger.Error("run job check error", err)
+					}
+				*/
 			case <-t.closeSignForJobcheck:
 				t.logger.Info("JobCheck close")
 				return
