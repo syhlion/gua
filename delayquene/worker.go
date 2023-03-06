@@ -358,13 +358,13 @@ func (t *Worker) RunJobCheck() {
 		timer := time.NewTicker(time.Duration(r) * time.Second)
 		for {
 			select {
-			case <-timer.C:
-				/*
-					err := t.bucket.JobCheck(<-t.bucketNameChan, tt, t.machineHost)
-					if err != nil {
-						t.logger.Error("run job check error", err)
-					}
-				*/
+			case tt := <-timer.C:
+
+				err := t.bucket.JobCheck(<-t.bucketNameChan, tt, t.machineHost)
+				if err != nil {
+					t.logger.Error("run job check error", err)
+				}
+
 			case <-t.closeSignForJobcheck:
 				t.logger.Info("JobCheck close")
 				return
@@ -377,7 +377,7 @@ func (t *Worker) RunJobCheck() {
 func (t *Worker) RunForDelayQuene() {
 	t.once2.Do(func() {
 		for i := 0; i < bucketSize; i++ {
-			t.timers[i] = time.NewTicker(500 * time.Millisecond)
+			t.timers[i] = time.NewTicker(800 * time.Millisecond)
 			t.closeSign[i] = make(chan int, 1)
 			realBucketName := fmt.Sprintf(t.bucketName, i+1)
 			t.wait.Add(1)
@@ -396,7 +396,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 		if bi.Timestamp > ti.Unix() {
 			return
 		}
-		go func(bi *BucketItem, ti time.Time, realBucketName string) {
+		func() {
 			var err error
 			defer func() {
 				if err != nil {
@@ -493,8 +493,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				t.jobQuene.Remove(bi.JobId)
 			}
 
-		}(bi, ti, realBucketName)
+		}()
 	}
-
 	return
 }

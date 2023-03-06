@@ -69,22 +69,24 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 	}
 	var scanJob []interface{}
 	var job []interface{}
-	var jobName []interface{}
+
 	//檢查是否有多餘的點查並且刪除
 	for _, v := range replys {
 		t := strings.TrimSuffix(v, "-scan")
 		job = append(job, t)
 		scanJob = append(scanJob, v)
-		ss := jobCheckRe.FindStringSubmatch(v)
-		jobName = append(jobName, "JOB"+"-"+ss[1]+"-"+ss[2])
 	}
-	jobs, err := redis.ByteSlices(c.Do("MGET", job...))
+	jobDatas, err := redis.ByteSlices(c.Do("MGET", job...))
 	if err != nil {
 		return err
 	}
-	for i, v := range jobs {
+	//確認job 是否存在
+	for i, v := range jobDatas {
 		if v == nil {
-			c.Send("DEL", job[i])
+			//刪除 沒有job的job-*-scan
+			c.Send("DEL", scanJob[i])
+			//刪除已經刪除的scanJob
+			scanJob = append(scanJob[:i], scanJob[i+1:]...)
 			b.logger.Errorf("job miss main job %s", job[i])
 		}
 	}
@@ -92,10 +94,6 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 
 	//檢查是否有超時沒有進入bucket的任務 依據條件進行任務啟動
 	scanJobTime, err := redis.Int64s(c.Do("MGET", scanJob...))
-	if err != nil {
-		return err
-	}
-	jobDatas, err := redis.ByteSlices(c.Do("MGET", jobName...))
 	if err != nil {
 		return err
 	}
@@ -150,26 +148,29 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 		if b.stopFlag == 1 {
 			return
 		}
+		cc := b.rpool.Get()
+		defer cc.Close()
+		//cc.Flush()
+		downBucket, err := redis.String(cc.Do("LPOP", "down-server"))
+		if err != nil {
+
+			cc.Close()
+			return
+		}
+		b.logger.Infof("GET New Server:%s Merge to %s Start", downBucket, key) //經過的job 增加 job-scan 時間
+		cc.Send("ZUNIONSTORE", key, 2, key, downBucket, "WEIGHTS", 1, 1, "AGGREGATE", "MIN")
+		cc.Send("DEL", downBucket)
+		cc.Flush()
+		b.logger.Infof("GET New Server:%s Merge to %s Finish", downBucket, key)
 		//檢查是否有其他server 遺落的任務 & 對於經過的任務增加檢核時間點
 		go func() {
 
-			cc := b.rpool.Get()
-			defer cc.Close()
+			ccc := b.rpool.Get()
+			defer ccc.Close()
 			for _, i := range items {
-				cc.Send("SET", i.JobId+"-scan", t)
+				ccc.Send("SET", i.JobId+"-scan", t)
 			}
-			//cc.Flush()
-			downBucket, err := redis.String(cc.Do("LPOP", "down-server"))
-			if err != nil {
 
-				c.Close()
-				return
-			}
-			b.logger.Infof("GET New Server:%s Merge to %s Start", downBucket, key) //經過的job 增加 job-scan 時間
-			cc.Send("ZUNIONSTORE", key, 2, key, downBucket, "WEIGHTS", 1, 1, "AGGREGATE", "MIN")
-			cc.Send("DEL", downBucket)
-			cc.Flush()
-			b.logger.Infof("GET New Server:%s Merge to %s Finish", downBucket, key)
 		}()
 	}()
 
