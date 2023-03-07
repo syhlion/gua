@@ -66,7 +66,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 					logrus.Fields{
 						"delay_time": fmt.Sprintf("%v", st),
 						"job":        fmt.Sprintf("%v", job),
-					}).Error("job-delay finsh ready quene.")
+					}).Warn("job-delay finsh ready quene.")
 			}
 
 			t.logger.WithFields(logrus.Fields{
@@ -127,7 +127,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 			logrus.Fields{
 				"delay_time": fmt.Sprintf("%v", st),
 				"job":        fmt.Sprintf("%v", job),
-			}).Errorf("job-delay receive ready quene.")
+			}).Warn("job-delay receive ready quene.")
 	}
 	cmdType = ss[1]
 	switch cmdType {
@@ -377,7 +377,7 @@ func (t *Worker) RunJobCheck() {
 func (t *Worker) RunForDelayQuene() {
 	t.once2.Do(func() {
 		for i := 0; i < bucketSize; i++ {
-			t.timers[i] = time.NewTicker(800 * time.Millisecond)
+			t.timers[i] = time.NewTicker(700 * time.Millisecond)
 			t.closeSign[i] = make(chan int, 1)
 			realBucketName := fmt.Sprintf(t.bucketName, i+1)
 			t.wait.Add(1)
@@ -398,17 +398,13 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 		}
 		func() {
 			var err error
-			defer func() {
-				if err != nil {
 
-					t.logger.WithError(err).Errorf("job bucket has error")
-				}
-			}()
 			job, err := t.jobQuene.Get(bi.JobId)
 			if err != nil {
 				if err == redis.ErrNil {
 					t.jobQuene.Remove(bi.JobId)
 					t.logger.WithError(err).Errorf("jobQuene get error,remove job %s", bi.JobId)
+					return
 				}
 				t.logger.WithError(err).Error("jobQuene get error")
 				t.bucket.Remove(realBucketName, bi.JobId)
@@ -458,7 +454,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 			b, err := proto.Marshal(rj)
 			if err != nil {
 				t.bucket.Remove(realBucketName, bi.JobId)
-				t.logger.WithError(err).Error("push to ready quene marshal error job %v", job)
+				t.logger.WithError(err).Errorf("push to ready quene marshal error job %v", job)
 				return
 			}
 
@@ -478,7 +474,7 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 					logrus.Fields{
 						"delay_time": fmt.Sprintf("%v", st),
 						"job":        fmt.Sprintf("%v", job),
-					}).Errorf("job-delay push ready quene.")
+					}).Warn("job-delay push ready quene.")
 			}
 
 			//remove bucket
