@@ -142,6 +142,15 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 	c := b.rpool.Get()
 	t := time.Now().Unix()
 	defer func() {
+		go func() {
+
+			ccc := b.rpool.Get()
+			defer ccc.Close()
+			for _, i := range items {
+				ccc.Send("SET", i.JobId+"-scan", t)
+			}
+
+		}()
 		c.Close()
 		b.lock.RLock()
 		defer b.lock.RUnlock()
@@ -163,15 +172,7 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 		cc.Flush()
 		b.logger.Infof("GET New Server:%s Merge to %s Finish", downBucket, key)
 		//檢查是否有其他server 遺落的任務 & 對於經過的任務增加檢核時間點
-		go func() {
 
-			ccc := b.rpool.Get()
-			defer ccc.Close()
-			for _, i := range items {
-				ccc.Send("SET", i.JobId+"-scan", t)
-			}
-
-		}()
 	}()
 
 	reply, err := redis.Values(c.Do("ZRANGE", key, 0, -1, "WITHSCORES"))
