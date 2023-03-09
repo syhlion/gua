@@ -34,7 +34,8 @@ var bucketNamePrefix = "BUCKET-[%s-%s]"
 // JOB-{groupName}-{jobId}
 var jobNamePrefix = "JOB-%s-%s"
 var re = regexp.MustCompile(`^SERVER-(\d+)$`)
-var jobCheckRe = regexp.MustCompile(`^JOB-([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)-scan$`)
+
+// var jobCheckRe = regexp.MustCompile(`^JOB-([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)-scan$`)
 var jobRe = regexp.MustCompile(`^JOB-([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)$`)
 var UrlRe = regexp.MustCompile(`^(HTTP|REMOTE|LUA)\@(.+)?`)
 

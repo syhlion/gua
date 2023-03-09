@@ -145,6 +145,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 }
 func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 	c := b.rpool.Get()
+	defer c.Flush()
 	t := time.Now().Unix()
 	defer func() {
 		go func() {
@@ -204,8 +205,13 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 			continue
 		}
 
-		item.Timestamp = value
-		items = append(items, item)
+		//檢查jobid 是否符合規範
+		if jobRe.MatchString(kkey) {
+			item.Timestamp = value
+			items = append(items, item)
+		} else {
+			c.Send("ZREM", key, kkey)
+		}
 	}
 	return
 
