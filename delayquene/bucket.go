@@ -114,7 +114,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 			}
 			//任務是Active 才進行補任務
 			if jb.Active {
-				err = b.Push(key, 0, jb.Id)
+				err = b.Push(key, jb.Exectime, jb.Id)
 				if err != nil {
 					b.logger.Error("job miss but auto patch job error", jb.Id, err)
 					return err
@@ -154,6 +154,7 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 			for _, i := range items {
 				ccc.Send("SET", i.JobId+"-scan", t)
 			}
+			ccc.Flush()
 
 		}()
 		c.Close()
