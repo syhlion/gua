@@ -152,7 +152,7 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 			ccc := b.rpool.Get()
 			defer ccc.Close()
 			for _, i := range items {
-				ccc.Send("SET", i.JobId+"-scan", t)
+				ccc.Send("SET", "JOB-"+i.JobId+"-scan", t)
 			}
 			ccc.Flush()
 
