@@ -81,17 +81,22 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 		return err
 	}
 	//確認job 是否存在
+	var delScanJobIndex []int
 	for i, v := range jobDatas {
 		if v == nil {
 			//刪除 沒有job的job-*-scan
 			c.Send("DEL", scanJob[i])
 			//刪除已經刪除的scanJob
-			scanJob = append(scanJob[:i], scanJob[i+1:]...)
+			delScanJobIndex = append(delScanJobIndex, i)
+
 			b.logger.Errorf("job miss main job %s", job[i])
 		}
 	}
 	c.Flush()
 
+	for _, i := range delScanJobIndex {
+		scanJob = append(scanJob[:i], scanJob[i+1:]...)
+	}
 	//檢查是否有超時沒有進入bucket的任務 依據條件進行任務啟動
 	scanJobTime, err := redis.Int64s(c.Do("MGET", scanJob...))
 	if err != nil {
