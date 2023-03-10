@@ -119,7 +119,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 					b.logger.Error("job miss but auto patch job error", jb.Id, err)
 					return err
 				}
-				b.logger.Error("job miss and auto patch job ", jb.Id)
+				b.logger.Error("job miss and auto patch job ", jb.Id, scanJob, i, v)
 			} else {
 
 				t := time.Now().Add(72 * time.Hour)
