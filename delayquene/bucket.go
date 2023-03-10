@@ -205,15 +205,13 @@ func (b *Bucket) Get(key string) (items []*BucketItem, err error) {
 			return nil, err
 		}
 		item.JobId = kkey
-		if item.JobId == "" {
-			continue
-		}
 
 		//檢查jobid 是否符合規範
 		if jobRe.MatchString(kkey) {
 			item.Timestamp = value
 			items = append(items, item)
 		} else {
+			b.logger.Errorf("bucket get error %v", kkey)
 			c.Send("ZREM", key, kkey)
 		}
 	}
