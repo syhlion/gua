@@ -103,6 +103,10 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 		return err
 	}
 	for i, v := range scanJobTime {
+		// scan 不存在 不用補任務
+		if v == 0 {
+			continue
+		}
 		tlastTime := time.Unix(v, 0)
 		if now.Sub(tlastTime) > 2*time.Minute {
 
@@ -119,7 +123,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 					b.logger.Error("job miss but auto patch job error", jb.Id, err)
 					return err
 				}
-				b.logger.Error("job miss and auto patch job ", jb.Id, scanJob, i, v)
+				b.logger.Error("job miss and auto patch job ", jb.Id)
 			} else {
 
 				t := time.Now().Add(72 * time.Hour)
