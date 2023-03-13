@@ -118,7 +118,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 			}
 			//任務是Active 才進行補任務
 			if jb.Active {
-				err = b.Push(key, jb.Exectime, jb.Id)
+				err = b.Push(key, jb.Exectime, fmt.Sprintf(jobNamePrefix, jb.GroupName, jb.Id))
 				if err != nil {
 					b.logger.Error("job miss but auto patch job error", jb.Id, err)
 					return err
