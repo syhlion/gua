@@ -81,7 +81,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 		return err
 	}
 	//確認job 是否存在
-	var delScanJobIndex []int
+
 	for i, v := range jobDatas {
 		if v == nil {
 			//刪除 沒有job的job-*-scan
