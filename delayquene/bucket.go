@@ -86,8 +86,7 @@ func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err er
 		if v == nil {
 			//刪除 沒有job的job-*-scan
 			c.Send("DEL", scanJob[i])
-
-			b.logger.Errorf("job miss main job %s", job[i])
+			b.logger.Infof("job miss main job %s", job[i])
 		}
 	}
 	c.Flush()

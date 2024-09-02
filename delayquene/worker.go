@@ -351,8 +351,8 @@ func (t *Worker) GenerateBucketName() <-chan string {
 	return c
 }
 func (t *Worker) RunJobCheck() {
-	rand.Seed(time.Now().UnixNano())
-	r := 30 + rand.Intn(30)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r := 30 + rng.Intn(30)
 	t.logger.Info("JobCheck gap ", r, " Second")
 	t.once3.Do(func() {
 		timer := time.NewTicker(time.Duration(r) * time.Second)
