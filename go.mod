@@ -3,9 +3,6 @@ module github.com/syhlion/gua
 go 1.25.0
 
 require (
-	github.com/alicebob/miniredis/v2 v2.30.4
-	github.com/bwmarrin/snowflake v0.3.0
-	github.com/gomodule/redigo v1.8.9
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -22,7 +19,6 @@ require (
 )
 
 require (
-	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
@@ -42,7 +38,6 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	github.com/yuin/gopher-lua v1.1.0 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect

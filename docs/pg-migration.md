@@ -121,10 +121,17 @@ Branch `pg-store` off `harden`; docker Postgres up; River + driver chosen
 - [x] `/ui`, `/v1/status`, `/v1/{group}/history` work unchanged over the River
   backend (same handlers, same `Quene` interface).
 
-### Phase 5 — delete compensation code + drop Redis  ← **gate: only after River is proven**
-Delete the Redis `Quene` impl + bucket / lock / scan / JobCheck / down-server /
-`SERVER-N` fencing / fence. Remove `redigo` from `go.mod` + vendor. Collapse the
-4 Redis env groups into one PG DSN.
+### Phase 5 — delete compensation code + drop Redis ✅ done
+- [x] deleted the Redis `Quene` impl: `quene.go` / `bucket.go` / `lock.go` /
+  `job.go` / `worker.go` / `history.go` (Redis) / `help.go` (RedisScan), plus the
+  miniredis tests. Shared types (Quene interface, Stats/HistoryEntry/
+  TriggerEnvelope, UrlRe) moved to `types.go`; cron (`parser.go`/`spec.go`) kept.
+- [x] deleted the `migrate` package (Redis dump/import) + its HTTP handlers.
+- [x] `cmd.go` collapsed to the River path; `config.go` (4 Redis env groups)
+  removed; one `PG_DSN` env. `BACKEND` toggle no longer needed — `start()` is River.
+- [x] `go.mod` / vendor drop `redigo`, `miniredis`, `gopher-lua`. Net −2,956 lines.
+- [x] verified: build/vet green, River suite green, PG-only binary exercised
+  end-to-end (register → add → fire → history).
 
 ### Phase 6 — data migration + cutover
 One-shot script: Redis in-flight jobs → `river.Insert`. Cutover + rollback

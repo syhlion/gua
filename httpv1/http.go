@@ -1,21 +1,16 @@
 package httpv1
 
 import (
-	"bufio"
 	"encoding/json"
-	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"github.com/syhlion/gua/delayquene"
-	"github.com/syhlion/gua/migrate"
 	guaproto "github.com/syhlion/gua/proto"
 	"github.com/syhlion/restresp"
 )
@@ -65,62 +60,6 @@ func History(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request
 			return
 		}
 		restresp.Write(w, entries, http.StatusOK)
-	}
-}
-func Import(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			return
-		}
-		err = m.Import(b)
-		if err != nil {
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		restresp.Write(w, "success", http.StatusOK)
-
-		return
-
-	}
-}
-func DumpBy(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		groupName := vars["group_name"]
-		buff, err := m.Dump(groupName)
-		if err != nil {
-			logger.Errorf("Dump error: %#v", err)
-			return
-		}
-		tf := time.Now().Format("2006-01-02-150405")
-		fileName := fmt.Sprintf("%s-%s-backup.tar.gz", tf, groupName)
-		w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
-		w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
-		b := bufio.NewReader(buff)
-		io.Copy(w, b)
-		return
-
-	}
-}
-func DumpAll(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		buff, err := m.Dump("*")
-		if err != nil {
-			logger.Errorf("Dump error: %#v", err)
-			return
-		}
-		tf := time.Now().Format("2006-01-02-150405")
-		fileName := fmt.Sprintf("%s-backup.tar.gz", tf)
-		w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
-		w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
-		b := bufio.NewReader(buff)
-		io.Copy(w, b)
-		return
-
 	}
 }
 func GroupInfo(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {

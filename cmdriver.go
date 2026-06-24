@@ -76,7 +76,7 @@ func startRiver(c *cli.Context) {
 	}
 	server := http.Server{
 		ReadTimeout: 3 * time.Second,
-		Handler:     handlers.CORS()(buildRouter(quene, nil)),
+		Handler:     handlers.CORS()(buildRouter(quene)),
 	}
 
 	httpErr := make(chan error)
