@@ -1,53 +1,96 @@
 syntax = "proto3";
 package guaproto;
 option go_package = "github.com/syhlion/gua/proto/guaproto";
-message JobReplyRequest {
-   string job_id = 1;
-   string success = 2;
-   string error = 3;
-   string otp_code = 4;
-   int64 plan_time = 5;
-   int64 exec_time = 6;
-   int64 finish_time = 7;
-   int64 get_job_time =8;
-   string exec_job_machine_host = 9;
-   string exec_job_machine_mac = 10;
-   string exec_job_machine_ip = 11;
-   string get_job_machine_host = 12;
-   string get_job_machine_mac = 13;
-   string get_job_machine_ip = 14;
-   string node_id = 15;
-   string group_name = 16;
-}
-message JobReplyResponse {
-}
-message NodeRegisterRequest {
-   string hostname = 1;
-   string ip = 2;
-   string mac = 3;
-   string otp_token = 4;
-   string boradcast_addr = 5;
-   string grpclisten = 6;
-   string machine_code = 7;
-   string group_name = 8;
-   string otp_code = 9;
-}
-message NodeRegisterResponse {
-   string node_id = 1;
-}
-message Ping {
-    string node_id = 1;
-    string group_name = 2;
-    string otp_code = 3;
-}
-message Pong {
+
+enum DeliveryType {
+  HTTP = 0;
+  GRPC = 1;
 }
 
-service Gua {
-    rpc NodeRegister(NodeRegisterRequest) returns (NodeRegisterResponse){
-    }
-    rpc JobReply(JobReplyRequest) returns (JobReplyResponse){
-    }
-    rpc Heartbeat(Ping) returns (Pong){
-    }
+message Empty {}
+
+message GroupRequest {
+  string group_name = 1;
+}
+
+message AddJobRequest {
+  string group_name = 1;
+  string job_id = 2;            // empty => gua generates a snowflake id
+  string name = 3;
+  int64 exec_time = 4;          // unix seconds, first fire
+  string interval_pattern = 5;  // "@once" | cron | "@every 1h"
+  DeliveryType delivery = 6;
+  string target = 7;            // HTTP: url ; GRPC: host:port
+  string payload = 8;
+  int64 timeout = 9;
+  string memo = 10;
+}
+message AddJobResponse {
+  string job_id = 1;
+}
+
+message EditJobRequest {
+  string group_name = 1;
+  string job_id = 2;
+  DeliveryType delivery = 3;
+  string target = 4;
+  string payload = 5;
+}
+
+message JobRef {
+  string group_name = 1;
+  string job_id = 2;
+}
+
+message ActiveJobRequest {
+  string group_name = 1;
+  string job_id = 2;
+  int64 exec_time = 3;
+}
+
+message JobInfo {
+  string name = 1;
+  string id = 2;
+  int64 exec_time = 3;
+  string interval_pattern = 4;
+  DeliveryType delivery = 5;
+  string target = 6;
+  string payload = 7;
+  string group_name = 8;
+  bool active = 9;
+  string memo = 10;
+}
+message ListJobsResponse {
+  repeated JobInfo jobs = 1;
+}
+
+// GuaAdmin: consumer -> gua. Mirrors the HTTP REST admin API.
+service GuaAdmin {
+  rpc RegisterGroup(GroupRequest) returns (Empty);
+  rpc RemoveGroup(GroupRequest) returns (Empty);
+  rpc AddJob(AddJobRequest) returns (AddJobResponse);
+  rpc EditJob(EditJobRequest) returns (Empty);
+  rpc DeleteJob(JobRef) returns (Empty);
+  rpc PauseJob(JobRef) returns (Empty);
+  rpc ActiveJob(ActiveJobRequest) returns (Empty);
+  rpc ListJobs(GroupRequest) returns (ListJobsResponse);
+}
+
+// Trigger envelope delivered to the consumer when a job fires.
+message JobTrigger {
+  string job_id = 1;
+  string job_name = 2;
+  string group_name = 3;
+  int64 plan_time = 4;   // scheduled unix seconds
+  int64 exec_time = 5;   // actual dispatch unix seconds
+  string payload = 6;
+}
+message JobResult {
+  bool success = 1;
+  string message = 2;
+}
+
+// GuaCallback: gua -> consumer (Push). The CONSUMER implements this; gua dials.
+service GuaCallback {
+  rpc OnJobTrigger(JobTrigger) returns (JobResult);
 }

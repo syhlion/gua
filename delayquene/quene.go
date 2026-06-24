@@ -13,7 +13,6 @@ import (
 
 	"github.com/bwmarrin/snowflake"
 	"github.com/gomodule/redigo/redis"
-	"github.com/pquerna/otp/totp"
 	"github.com/syhlion/greq"
 	guaproto "github.com/syhlion/gua/proto"
 	requestwork "github.com/syhlion/requestwork.v2"
@@ -249,18 +248,15 @@ type Config struct {
 }
 
 type Quene interface {
-	Heartbeat(nodeId string, groupName string) (err error)
 	GenerateUID() (s string)
 	Remove(jobId string) (err error)
-	Edit(groupName, jobId, requestUrl, execCmd string) (err error)
+	Edit(groupName, jobId, requestUrl, payload string) (err error)
 	Active(groupName string, jobId string, exectime int64) (err error)
 	Pause(groupName string, jobId string) (err error)
 	Delete(groupName string, jobId string) (err error)
 	List(groupName string) (jobs []*guaproto.Job, err error)
 	Push(job *guaproto.Job) (err error)
-	RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto.NodeRegisterResponse, err error)
-	RegisterGroup(groupName string) (otpToken string, err error)
-	QueryNodes(groupName string) (nodes []*guaproto.NodeRegisterRequest, err error)
+	RegisterGroup(groupName string) (err error)
 	QueryGroups() (s []string, err error)
 	GroupInfo(groupName string) (s string, err error)
 	Close()
@@ -304,16 +300,12 @@ func (t *q) QueryGroups() (groups []string, err error) {
 	defer conn.Close()
 	return RedisScan(conn, "USER_*")
 }
-func (t *q) RegisterGroup(groupName string) (otpToken string, err error) {
+func (t *q) RegisterGroup(groupName string) (err error) {
 	conn := t.urpool.Get()
 	defer conn.Close()
-	kkey, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      groupName,
-		AccountName: t.worker.bucketName,
-	})
 
 	groupKey := fmt.Sprintf("USER_%s", groupName)
-	v, err := redis.Int(conn.Do("SETNX", groupKey, kkey.Secret()))
+	v, err := redis.Int(conn.Do("SETNX", groupKey, "1"))
 	if err != nil {
 		return
 	}
@@ -321,69 +313,17 @@ func (t *q) RegisterGroup(groupName string) (otpToken string, err error) {
 		err = errors.New("duplicate key")
 		return
 	}
-	return kkey.Secret(), nil
+	return nil
 
 }
 
-func (t *q) QueryNodes(groupName string) (nodes []*guaproto.NodeRegisterRequest, err error) {
-	conn := t.urpool.Get()
-	defer conn.Close()
-
-	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_*", groupName)
-	keys, err := RedisScan(conn, remoteKey)
-	if err != nil {
-		return
-	}
-	nodes = make([]*guaproto.NodeRegisterRequest, 0)
-	for _, v := range keys {
-		b, err := redis.Bytes(conn.Do("GET", v))
-		if err != nil {
-			continue
-		}
-		node := &guaproto.NodeRegisterRequest{}
-		err = proto.Unmarshal(b, node)
-		if err != nil {
-			continue
-		}
-		nodes = append(nodes, node)
-	}
-	return
-
-}
-func (t *q) RegisterNode(nodeInfo *guaproto.NodeRegisterRequest) (resp *guaproto.NodeRegisterResponse, err error) {
-
-	uconn := t.urpool.Get()
-	defer uconn.Close()
-	groupKey := fmt.Sprintf("USER_%s", nodeInfo.GroupName)
-	token, err := redis.String(uconn.Do("GET", groupKey))
-	if err != nil {
-		return
-	}
-	if token == "" {
-		err = errors.New("NO GROUP")
-		return
-	}
-	id := t.node.Generate().String()
-	nodeId := fmt.Sprintf("%s@%s@%s", id, nodeInfo.Ip, nodeInfo.Hostname)
-	resp = &guaproto.NodeRegisterResponse{
-		NodeId: nodeId,
-	}
-	b, err := proto.Marshal(nodeInfo)
-	if err != nil {
-		return
-	}
-	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", nodeInfo.GroupName, nodeId)
-	_, err = uconn.Do("SET", remoteKey, b, "EX", 86400)
-	return
-
-}
-func (t *q) Edit(groupName, Id, requestUrl, execCmd string) (err error) {
+func (t *q) Edit(groupName, Id, requestUrl, payload string) (err error) {
 	job, err := t.jobQuene.Get(fmt.Sprintf(jobNamePrefix, groupName, Id))
 	if err != nil {
 		return
 	}
 	job.RequestUrl = requestUrl
-	job.ExecCmd = []byte(execCmd)
+	job.Payload = payload
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
 	if len(ss) == 0 {
 		return errors.New("type error")
@@ -488,21 +428,6 @@ func (t *q) Delete(groupName, jobId string) (err error) {
 	_, err = conn.Do("DEL", jobKey)
 	_, err = conn.Do("DEL", jobKey+"-scan")
 	return
-}
-func (t *q) Heartbeat(nodeId string, groupName string) (err error) {
-	conn := t.urpool.Get()
-	defer conn.Close()
-	remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", groupName, nodeId)
-
-	reply, err := redis.Int(conn.Do("EXPIRE", remoteKey, 86400))
-	if err != nil {
-		return
-	}
-	if reply == 0 {
-		return errors.New("NO_REMOTE_NODE")
-	}
-	return
-
 }
 func (t *q) Push(job *guaproto.Job) (err error) {
 

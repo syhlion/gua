@@ -9,7 +9,6 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/joho/godotenv v1.5.1
 	github.com/json-iterator/go v1.1.12
-	github.com/pquerna/otp v1.4.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/syhlion/greq v1.1.3
 	github.com/syhlion/requestwork.v2 v0.0.0-20221121064106-5982b8b66fbe
@@ -20,7 +19,6 @@ require (
 )
 
 require (
-	github.com/boombuler/barcode v1.0.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect

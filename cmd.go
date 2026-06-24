@@ -16,12 +16,10 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
-	"github.com/syhlion/greq"
 	"github.com/syhlion/gua/delayquene"
 	"github.com/syhlion/gua/httpv1"
 	"github.com/syhlion/gua/migrate"
 	guaproto "github.com/syhlion/gua/proto"
-	requestwork "github.com/syhlion/requestwork.v2"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -306,20 +304,12 @@ func start(c *cli.Context) {
 		return
 	}
 
-	work := requestwork.New(100)
-	client := greq.New(work, 60*time.Second, true)
-
 	// 註冊 grpc
-	sr := &Gua{
-		config:     conf,
-		httpClient: client,
-		quene:      quene,
-		rpool:      groupRedis,
-	}
+	sr := &GuaAdmin{quene: quene}
 	migrate := migrate.New(groupRedis, delayRedis, apiRedis)
 
 	grpc := grpc.NewServer()
-	guaproto.RegisterGuaServer(grpc, sr)
+	guaproto.RegisterGuaAdminServer(grpc, sr)
 	httpv1.SetLogger(logger)
 
 	reflection.Register(grpc)
@@ -340,7 +330,6 @@ func start(c *cli.Context) {
 
 	subRouter.HandleFunc("/{group_name}/job/list", httpv1.GetJobList(quene)).Methods("GET")
 	subRouter.HandleFunc("/{group_name}/group/info", httpv1.GroupInfo(quene)).Methods("GET")
-	subRouter.HandleFunc("/{group_name}/node/list", httpv1.GetNodeList(quene)).Methods("GET")
 	subRouter.HandleFunc("/{group_name}/dump", httpv1.DumpBy(migrate)).Methods("GET")
 	subRouter.HandleFunc("/{group_name}/job/clear", httpv1.GroupJobClear(quene)).Methods(http.MethodDelete)
 	subRouter.HandleFunc("/{group_name}/job/delete/{job_name}", httpv1.RemoveJobsByJobName(quene)).Methods(http.MethodDelete)

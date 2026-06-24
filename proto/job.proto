@@ -1,41 +1,34 @@
 syntax = "proto3";
 package guaproto;
 option go_package = "github.com/syhlion/gua/proto/guaproto";
+
+// Job is the internal stored representation of a scheduled job.
+// request_url keeps the "HTTP@<target>" / "GRPC@<target>" form used by the
+// bucket/worker dispatch; the admin API exposes it as delivery + target.
 message Job {
    string name = 1;
    string Id = 2;
    int64 exectime = 3;
-   string otp_token = 4;
-   int64 timeout = 5;
-   string interval_pattern = 6;
-   string request_url =7;
-   bytes exec_cmd = 8;
-   string group_name = 9;
-   bool active=10;
-   string memo=11;
+   int64 timeout = 4;
+   string interval_pattern = 5;
+   string request_url = 6;
+   string payload = 7;
+   string group_name = 8;
+   bool active = 9;
+   string memo = 10;
 }
 
+// ReadyJob is the envelope pushed onto the ready queue for a worker to fire.
 message ReadyJob {
    string name = 1;
    string Id = 2;
-   string otp_token = 3;
-   int64 timeout = 4;
-   string request_url =5;
-   bytes exec_cmd = 6;
-   int64 plan_time = 7;
-   int64 get_job_time = 8;
-   string get_job_machine_host = 9;
-   string get_job_machine_mac = 10;
-   string get_job_machine_ip = 11;
-   string group_name = 12;
-}
-message Func {
-  string name = 1;
-  string group_name = 2;
-  bool use_otp = 3;
-  bool disable_group_otp = 4;
-  string otp_token = 5;
-  bytes LuaBody = 6;
-  bool active = 7;
-  string memo = 8;
+   int64 timeout = 3;
+   string request_url = 4;
+   string payload = 5;
+   int64 plan_time = 6;
+   int64 get_job_time = 7;
+   string get_job_machine_host = 8;
+   string get_job_machine_mac = 9;
+   string get_job_machine_ip = 10;
+   string group_name = 11;
 }

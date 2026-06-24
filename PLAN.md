@@ -15,7 +15,11 @@
   - 往後只有兩種派送:**HTTP** 或 **gRPC**;註冊與 callback 都支援。
   - **gRPC callback = Push**:gua 主動 dial 消費者的 gRPC server,呼叫 `OnJobTrigger`(消費者實作),同步回應取代舊 JobReply。
   - **CRUD 雙軌**:job 建/刪/暫停/恢復/查 + group 註冊,HTTP REST 與 gRPC 等價並存。
-  - Job model:`request_url` 前綴 `(HTTP|REMOTE|LUA)@` → `(HTTP|GRPC)@`;`exec_cmd` → 通用 `payload`。
+  - Job model:`request_url` 前綴 `(HTTP|REMOTE|LUA)@` → `(HTTP|GRPC)@`;`exec_cmd` bytes → 通用 `payload` string。
+  - **HTTP 升級對稱**:callback 由 GET ping 改 **POST JSON 信封**(與 gRPC `JobTrigger` 同欄位:job_id/job_name/group/plan_time/exec_time/payload)。
+  - **認證先拔掉**:TOTP/OTP 全移除(含 `pquerna/otp` 依賴);group 退化成純命名空間。日後認證走傳輸層(mTLS / 共享密鑰 header),不回頭塞 app 層。
+  - **callback 內嵌**:`target` 直接放位址(HTTP:url、GRPC:host:port),不做 endpoint 註冊。
+  - **Reply 不走舊制**:結果來自同步回應(HTTP 2xx/body、gRPC `JobResult`),再落地 Redis TTL 歷史(= Monitor Tier 2);全域 webhook 降為可選。
 - **Monitor 範圍**:快照 + 歷史 + 工程 Web UI。歷史存 Redis + TTL(env 可調,3–5 天)。UI 只給工程 / API 驗證用。
 - **壓測為必交付**:驗證並發任務數 + 執行時間誤差(p50/p95/p99/max)+ 完成率。
 
@@ -31,11 +35,11 @@
 - [x] **1a 移除 REMOTE/LUA**:刪 `node/`、`luacore/`、`luaweb/`、`apifunc.go`、func HTTP server(`LuaEntrance`)
 - [x] 清依賴:`gopher-lua`、`glua-libs`、`telegram-bot-api`、`go-sql-driver/mysql`、`bbolt`(順帶清 dependabot 漏洞)
 - [x] `UrlRe` 改 `^(HTTP|GRPC)@`;`ExecuteJob`/`Push`/`Edit` switch 收斂(HTTP 可跑,GRPC 派送留 1b)。build/vet 全綠
-- [ ] **1b 新 proto**:
-  - [ ] Admin/CRUD gRPC service(鏡像 HTTP:RegisterGroup / AddJob / Remove / Pause / Active / Edit / List / RegisterCallbackEndpoint)
-  - [ ] Trigger gRPC service(gua→消費者 Push:`OnJobTrigger(job_id,name,group,plan_time,exec_time,payload,otp_code)→result`)
-  - [ ] 移除舊 node 專屬 RPC(NodeRegister / RemoteCommand / JobReply / node Heartbeat)
-- [ ] **1c** Job model:`exec_cmd` → `payload` 語意調整;callback endpoint 註冊(位址 + OTP)存 Redis(取代 REMOTE_NODE_*)
+- [x] **1b 新 proto**:`GuaAdmin`(RegisterGroup/RemoveGroup/AddJob/EditJob/DeleteJob/PauseJob/ActiveJob/ListJobs)+ `GuaCallback`(`OnJobTrigger`)+ `DeliveryType` enum;刪 node.proto、舊 Gua/JobReply/Node RPC
+- [x] **1b 拔認證**:移除 TOTP/OTP 全鏈路 + `pquerna/otp` 依賴;group 純命名空間
+- [x] **1b HTTP callback 改 POST JSON 信封**(`TriggerEnvelope`,與 gRPC 同欄位)+ worker GRPC 派送(dial→`OnJobTrigger`)
+- [x] **1c** Job model:`exec_cmd` bytes → `payload` string;`request_url` 內部仍存 `TYPE@target`,API 用 `delivery`+`target`;清掉 dead root migrate.go/group.go/spec.go
+- [ ] **1b 尾巴**(留待):`benchmark/` 仍是 LUA 樣板(Phase 6 改寫);docs(README/apiv1.md/luamode.md/funclua.md)待重寫
 
 ### Phase 2 — 測試骨架(地基)
 - [ ] miniredis + 注入式 clock

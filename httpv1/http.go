@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"
 	"github.com/syhlion/gua/delayquene"
 	"github.com/syhlion/gua/migrate"
@@ -91,23 +90,6 @@ func DumpAll(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {
 
 	}
 }
-func GetNodeList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		groupName := vars["group_name"]
-		nodes, err := quene.QueryNodes(groupName)
-		if err != nil {
-			logger.Warnf("get node list error: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		restresp.Write(w, nodes, http.StatusOK)
-		return
-
-	}
-}
-
 func GroupInfo(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -160,11 +142,10 @@ func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Requ
 			job := &ResponseJobList{
 				Name:            v.Name,
 				Id:              v.Id,
-				OtpToken:        v.OtpToken,
 				Exectime:        v.Exectime,
 				IntervalPattern: v.IntervalPattern,
 				RequestUrl:      v.RequestUrl,
-				ExecCmd:         string(v.ExecCmd),
+				Payload:         v.Payload,
 				GroupName:       v.GroupName,
 				Active:          v.Active,
 				Memo:            v.Memo,
@@ -199,13 +180,13 @@ func RegisterGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 			restresp.Write(w, "groupname too long", http.StatusBadRequest)
 			return
 		}
-		otp, err := quene.RegisterGroup(payload.GroupName)
+		err = quene.RegisterGroup(payload.GroupName)
 		if err != nil {
 			logger.Warnf("RegisterGroup Error: %v", err)
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		restresp.Write(w, otp, http.StatusOK)
+		restresp.Write(w, payload.GroupName, http.StatusOK)
 
 	}
 }
@@ -238,11 +219,7 @@ func EditJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request
 			restresp.Write(w, "payload no request_url", http.StatusBadRequest)
 			return
 		}
-		if payload.ExecCmd == "" {
-			restresp.Write(w, "payload no ExecCmd", http.StatusBadRequest)
-			return
-		}
-		err = quene.Edit(payload.GroupName, payload.Id, payload.RequestUrl, payload.ExecCmd)
+		err = quene.Edit(payload.GroupName, payload.Id, payload.RequestUrl, payload.Payload)
 		if err != nil {
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
@@ -321,20 +298,9 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 			Timeout:         payload.Timeout,
 			IntervalPattern: payload.IntervalPattern,
 			RequestUrl:      payload.RequestUrl,
-			ExecCmd:         []byte(payload.ExecCommand),
+			Payload:         payload.Payload,
 			Active:          true,
 			Memo:            payload.Memo,
-		}
-		if !payload.UseGroupOtp {
-			kkey, err := totp.Generate(totp.GenerateOpts{
-				Issuer:      job.Id,
-				AccountName: payload.GroupName,
-			})
-			if err != nil {
-				restresp.Write(w, "otp generate error", http.StatusBadRequest)
-				return
-			}
-			job.OtpToken = kkey.Secret()
 		}
 		err = quene.Push(job)
 		if err != nil {

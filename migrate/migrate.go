@@ -28,10 +28,6 @@ type Migrate struct {
 
 func (m *Migrate) Dump(groupName string) (buf *bytes.Buffer, err error) {
 
-	apiBackup, err := m.apiBackup(groupName)
-	if err != nil {
-		return
-	}
 	groupBackup, err := m.groupBackup(groupName)
 	if err != nil {
 		return buf, err
@@ -45,19 +41,6 @@ func (m *Migrate) Dump(groupName string) (buf *bytes.Buffer, err error) {
 	defer gz.Close()
 	tw := tar.NewWriter(gz)
 	defer tw.Close()
-	for k, v := range apiBackup {
-		hdr := &tar.Header{
-			Name: k,
-			Mode: 0600,
-			Size: int64(len(v)),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return buf, err
-		}
-		if _, err := tw.Write(v); err != nil {
-			return buf, err
-		}
-	}
 	for k, v := range groupBackup {
 		hdr := &tar.Header{
 			Name: k,
@@ -103,21 +86,6 @@ func (m *Migrate) groupBackup(groupName string) (backup map[string][]byte, err e
 		backup[v] = body
 
 	}
-	if groupName != "*" {
-		groupName = groupName + "_*"
-	}
-	nodeKeys, err := RedisScan(conn, "REMOTE_NODE_"+groupName)
-	if err != nil {
-		return nil, err
-	}
-	for _, v := range nodeKeys {
-		body, err := redis.Bytes(conn.Do("GET", v))
-		if err != nil {
-			return nil, err
-		}
-		backup[v] = body
-
-	}
 	return
 }
 func (m *Migrate) delayBackup(groupName string) (backup map[string][]byte, err error) {
@@ -144,33 +112,9 @@ func (m *Migrate) delayBackup(groupName string) (backup map[string][]byte, err e
 	}
 	return
 }
-func (m *Migrate) apiBackup(groupName string) (backup map[string][]byte, err error) {
-	conn := m.apiRedis.Get()
-	defer conn.Close()
-	if groupName != "*" {
-		groupName = groupName + "-*"
-	}
-	apiKeys, err := redis.Strings(conn.Do("KEYS", "FUNC-"+groupName))
-	if err != nil {
-		return nil, err
-	}
-	backup = make(map[string][]byte)
-	for _, v := range apiKeys {
-		body, err := redis.Bytes(conn.Do("GET", v))
-		if err != nil {
-			return nil, err
-		}
-		backup[v] = body
-
-	}
-	return
-}
-
 var (
 	jobRe   = regexp.MustCompile(`^JOB-(.+)-(\d+)$`)
 	groupRe = regexp.MustCompile("^USER_")
-	funcRe  = regexp.MustCompile("^FUNC-")
-	nodeRe  = regexp.MustCompile("^REMOTE_NODE_")
 )
 
 func (m *Migrate) Import(b []byte) (err error) {
@@ -241,64 +185,6 @@ func (m *Migrate) Import(b []byte) (err error) {
 				return err
 			}
 
-			continue
-		}
-		if funcRe.MatchString(h.Name) {
-			err = func() (err error) {
-				conn := m.apiRedis.Get()
-				defer conn.Close()
-				buf := new(bytes.Buffer)
-				buf.ReadFrom(tr)
-
-				ff := &guaproto.Func{}
-				err = proto.Unmarshal(buf.Bytes(), ff)
-				if err != nil {
-					return
-				}
-
-				b, err := proto.Marshal(ff)
-				if err != nil {
-					return
-				}
-
-				_, err = conn.Do("SET", h.Name, b)
-				if err != nil {
-					return
-				}
-				return
-			}()
-			if err != nil {
-				return err
-			}
-			continue
-		}
-		if nodeRe.MatchString(h.Name) {
-			err = func() (err error) {
-				conn := m.groupRedis.Get()
-				defer conn.Close()
-				buf := new(bytes.Buffer)
-				buf.ReadFrom(tr)
-
-				ff := &guaproto.NodeRegisterRequest{}
-				err = proto.Unmarshal(buf.Bytes(), ff)
-				if err != nil {
-					return
-				}
-
-				b, err := proto.Marshal(ff)
-				if err != nil {
-					return
-				}
-
-				_, err = conn.Do("SET", h.Name, b)
-				if err != nil {
-					return
-				}
-				return
-			}()
-			if err != nil {
-				return err
-			}
 			continue
 		}
 

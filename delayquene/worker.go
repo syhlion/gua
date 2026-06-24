@@ -2,19 +2,19 @@ package delayquene
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"net/url"
 	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"
 	"github.com/syhlion/greq"
 	"github.com/syhlion/gua/loghook"
 	guaproto "github.com/syhlion/gua/proto"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -123,24 +123,57 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 			}).Warn("job-delay receive ready quene.")
 	}
 	cmdType = ss[1]
+	env := TriggerEnvelope{
+		JobId:     job.Id,
+		JobName:   job.Name,
+		GroupName: job.GroupName,
+		PlanTime:  job.PlanTime,
+		ExecTime:  execTime.Unix(),
+		Payload:   job.Payload,
+	}
 	switch cmdType {
 	case "HTTP":
-		u, err := url.Parse(ss[2])
-		if err != nil {
-			t.logger.WithError(err).Errorf("http url parse error. job:%#v", job)
-			return err
+		body, _ := json.Marshal(env)
+		respBody, status, herr := t.httpClient.PostRaw(ss[2], bytes.NewReader(body))
+		if herr != nil {
+			t.logger.WithError(herr).Errorf("http callback error. job:%#v", job)
+			return herr
 		}
-		q := u.Query()
-		passcode, _ := totp.GenerateCode(job.OtpToken, time.Now())
-		q.Set("otp_code", passcode)
-		q.Set("job_id", job.Id)
-		q.Set("job_name", job.Name)
-
-		u.RawQuery = q.Encode()
-		_, _, err = t.httpClient.Get(u.String(), nil)
-		if err != nil {
-			t.logger.WithError(err).Errorf("http get error. job:%#v", job)
-			return err
+		if status >= 400 {
+			t.logger.Errorf("http callback non-2xx %d. job:%#v", status, job)
+			return fmt.Errorf("http callback status %d", status)
+		}
+		resp = string(respBody)
+	case "GRPC":
+		timeout := time.Duration(job.Timeout) * time.Second
+		if timeout <= 0 {
+			timeout = 5 * time.Second
+		}
+		conn, derr := grpc.Dial(ss[2], grpc.WithInsecure())
+		if derr != nil {
+			t.logger.WithError(derr).Errorf("grpc dial error. addr:%s. job:%#v", ss[2], job)
+			return derr
+		}
+		defer conn.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		res, gerr := guaproto.NewGuaCallbackClient(conn).OnJobTrigger(ctx, &guaproto.JobTrigger{
+			JobId:     env.JobId,
+			JobName:   env.JobName,
+			GroupName: env.GroupName,
+			PlanTime:  env.PlanTime,
+			ExecTime:  env.ExecTime,
+			Payload:   env.Payload,
+		})
+		if gerr != nil {
+			t.logger.WithError(gerr).Errorf("grpc callback error. addr:%s. job:%#v", ss[2], job)
+			return gerr
+		}
+		if res != nil {
+			resp = res.Message
+			if !res.Success {
+				return fmt.Errorf("grpc callback reported failure: %s", res.Message)
+			}
 		}
 	default:
 		t.logger.Errorf("unsupported request type %q. job:%#v", cmdType, job)
@@ -148,6 +181,18 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	}
 	finishTime = time.Now().Unix()
 	return
+}
+
+// TriggerEnvelope is the payload delivered to a consumer when a job fires.
+// HTTP delivery sends it as a JSON POST body; gRPC delivery maps it onto
+// guaproto.JobTrigger. The two transports carry identical fields.
+type TriggerEnvelope struct {
+	JobId     string `json:"job_id"`
+	JobName   string `json:"job_name"`
+	GroupName string `json:"group_name"`
+	PlanTime  int64  `json:"plan_time"`
+	ExecTime  int64  `json:"exec_time"`
+	Payload   string `json:"payload"`
 }
 func (t *Worker) ReadyQueneWorker() {
 	for {
@@ -320,27 +365,12 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 
 				return
 			}
-			var token string
-			if job.OtpToken == "" {
-				conn := t.urpool.Get()
-				defer conn.Close()
-				groupKey := fmt.Sprintf("USER_%s", job.GroupName)
-				token, err = redis.String(conn.Do("GET", groupKey))
-				if err != nil {
-					t.bucket.Remove(realBucketName, bi.JobId)
-					t.logger.WithError(err).Errorf("optToken error job %v", job)
-					return
-				}
-			} else {
-				token = job.OtpToken
-			}
 			rj := &guaproto.ReadyJob{
 				Name:              job.Name,
 				Id:                job.Id,
-				OtpToken:          token,
 				Timeout:           job.Timeout,
 				RequestUrl:        job.RequestUrl,
-				ExecCmd:           job.ExecCmd,
+				Payload:           job.Payload,
 				PlanTime:          job.Exectime,
 				GetJobTime:        time.Now().Unix(),
 				GetJobMachineHost: t.machineHost,
