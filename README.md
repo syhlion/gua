@@ -28,21 +28,20 @@ $ ./gua start                    # or rely on the process environment
 
 ## Architecture
 
-```
-register/CRUD ─(HTTP REST or gRPC GuaAdmin)─▶ gua ──▶ Redis (bucket / ready queue)
-                                                │
-                  job fires ─▶ delivery ────────┤── HTTP  POST envelope ─▶ consumer
-                                                └── gRPC  OnJobTrigger  ─▶ consumer
-```
+![architecture](docs/diagrams/gua-architecture.png)
 
-Multiple gua instances form a cluster (slot election + heartbeat, orphaned
-work is reclaimed by peers, a periodic JobCheck patches lost jobs).
+Multiple gua instances form a cluster (slot election + owner-token fencing,
+orphaned work reclaimed by peers, a periodic JobCheck patches lost jobs). Full
+write-up — system / pipeline / cluster diagrams and the Redis keyspace — in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## API
+## Docs
 
-- Admin REST: [apiv1.md](./apiv1.md)
-- Admin gRPC (mirrors REST) + consumer callback: [`proto/gua.proto`](./proto/gua.proto)
-- Monitoring: `GET /v1/status`, `GET /v1/{group}/history`, web console at `GET /ui`
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture, pipeline, HA (with diagrams)
+- [apiv1.md](./apiv1.md) — admin REST API
+- [`proto/gua.proto`](./proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
+- [docs/MONITORING.md](docs/MONITORING.md) — `/v1/status`, `/v1/{group}/history`, `/ui`
+- [EVAL.md](./EVAL.md) — JobScheduler replacement evaluation & migration
 
 ## Tests
 

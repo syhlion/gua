@@ -1,5 +1,38 @@
 [unrelease]
 
+[v2.0.0] — harden (breaking)
+
+[Changed]
+
+* delivery reduced to two transports: HTTP and gRPC. Removed REMOTE (remote-shell
+  / gua-node) and LUA (in-process script) trigger types.
+* HTTP callback is now a JSON POST envelope (was a GET ping); same fields as the
+  gRPC trigger. `exec_command` -> `payload` (string).
+* new gRPC services: `GuaAdmin` (CRUD, mirrors the REST API) and `GuaCallback`
+  (`OnJobTrigger`, Push). Removed old node/JobReply RPCs.
+* removed app-level OTP auth; group is now a pure namespace. Use transport-level
+  auth (mTLS / gateway) if needed.
+* HTTP client swapped greq/requestwork (archived) -> resty.
+
+[Added]
+
+* monitoring: `GET /v1/status`, `GET /v1/{group}/history`, web console `GET /ui`.
+* execution history persisted to Redis with TTL retention (`GUA_HISTORY_TTL`).
+* test suite: cron parser units + miniredis lifecycle integration + lock/fencing
+  + stress/timing harness.
+* docs refresh: ARCHITECTURE.md, MONITORING.md, EVAL.md, new drawio diagrams.
+
+[Fixed / hardened]
+
+* `STARTLOCK`/`JOBCHECKLOCK` are TTL + owner-token locks (Lua CAS release) — no
+  more deadlock on holder crash; JobCheck no longer runs unlocked.
+* per-firing de-dup fence on the ready queue (reclaim / JobCheck can't
+  double-enqueue).
+* SERVER-N slot fencing (owner token + heartbeat CAS) closes the snowflake
+  node-id collision window; gRPC delivery connection pooling.
+* removed panics (nil request_url), context leaks, the uncatchable SIGKILL
+  handler, and the heavy lua/mysql/telegram dependency tree.
+
 [v1.4.1]
 
 * remove keys use and use scan iter
