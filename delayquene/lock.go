@@ -23,6 +23,17 @@ if redis.call("GET", KEYS[1]) == ARGV[1] then
 end
 return 0`)
 
+// heartbeatScript refreshes a server slot's heartbeat only while this node
+// still owns it (fencing): if the owner token no longer matches, the slot was
+// reclaimed by another node during a long pause and we must NOT keep using its
+// snowflake id. KEYS[1]=SERVER-N-OWN KEYS[2]=SERVER-N ARGV[1]=token ARGV[2]=now.
+var heartbeatScript = redis.NewScript(2, `
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+	redis.call("SET", KEYS[2], ARGV[2])
+	return 1
+end
+return 0`)
+
 // acquireLock attempts SET key token NX PX ttlMs. Returns true if acquired.
 // Unlike a bare SETNX, the PX expiry guarantees the lock self-releases if the
 // holder dies, so a crash can never deadlock the cluster.

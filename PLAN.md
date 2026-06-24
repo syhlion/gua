@@ -67,7 +67,7 @@
 - [x] `STARTLOCK`/`JOBCHECKLOCK` 換 TTL + owner token 鎖(Lua CAS 釋放);JobCheck 不再無鎖硬跑
 - [x] ready-queue dedup fence(`FENCE-<job>-<exectime>`,SET NX PX);reclaim/JobCheck 不重推
 - [x] gRPC 連線池化(per-addr 快取,免每次 Dial)
-- [~] `SERVER-N` 撞號窗口:接管門檻 15s→30s 縮小窗口 + startup 由 STARTLOCK 序列化(完整 fencing 列殘留風險)
+- [x] `SERVER-N` 撞號:owner-token fencing(`OWN-SERVER-N` + 心跳 CAS),被接管的節點下次心跳(≤1s)偵測到並 OnSupersede 退出(殘留 ≤1s 窗口)
 - [x] **壓測驗收通過**:N=500/2000/5000 同秒,0 漏觸發 0 重複,誤差 < 700ms ticker 地板(p99<300ms@5k)
 
 ### Phase 7 — ★ Monitor Tier 2:執行歷史 + 工程 Web UI — ✅ 完成

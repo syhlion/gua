@@ -58,9 +58,13 @@ sub-second precision, lower the ticker (`delayquene` `RunForDelayQuene`).
 
 ## Residual risks / follow-ups
 
-- **SERVER-N slot reuse** is mitigated (30s takeover window + STARTLOCK-
-  serialized startup), not fully fenced; a live node paused >30s could still be
-  reclaimed. Full lease/fencing is a larger change if ever needed.
+- **SERVER-N slot reuse** is now **fenced**: each slot carries an owner token
+  (`OWN-SERVER-N`); the heartbeat is a CAS that only refreshes while the token
+  matches. If another node reclaims the slot during a long pause, the original
+  node's next heartbeat (≤1s) sees the mismatch and fires `OnSupersede`
+  (production: fatal exit) instead of generating colliding snowflake ids.
+  Residual window: the ≤1s between a paused node resuming and its next
+  heartbeat tick — far tighter than the old unbounded risk.
 - **Redis is the single source of truth** — run it with persistence (AOF) and
   treat the 4 logical DBs as one failure domain.
 - **`greq` / `requestwork.v2` → `resty`** ✅ done (separate commit). HTTP client

@@ -32,6 +32,10 @@ var re = regexp.MustCompile(`^SERVER-(\d+)$`)
 var jobRe = regexp.MustCompile(`^JOB-([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)$`)
 var UrlRe = regexp.MustCompile(`^(HTTP|GRPC)\@(.+)?`)
 
+// ownerKeyOf returns the fencing-token key for a server slot. The "OWN-" prefix
+// keeps it out of the "SERVER-N-*" namespace that New() scans+deletes on start.
+func ownerKeyOf(serverName string) string { return "OWN-" + serverName }
+
 type servers []string
 
 func (s servers) Len() int {
@@ -58,25 +62,31 @@ func incrServerNum(c redis.Conn) (num int, s string, err error) {
 	}
 	return serverNum, "SERVER-" + strconv.Itoa(serverNum), nil
 }
-func initName(pool *redis.Pool) (serverNum int, s string, err error) {
+func initName(pool *redis.Pool) (serverNum int, s string, ownerToken string, err error) {
 
 	now := time.Now()
 	c := pool.Get()
-	token := newToken()
+	lockToken := newToken()
+	ownerToken = newToken()
 
 	defer func() {
-		//先做第一次時間更新
-		c.Do("SET", s, time.Now().UnixNano())
+		if s != "" {
+			//認領這個 slot:寫入第一次心跳 + 擁有權 token。
+			//reclaim 時這會覆蓋舊持有者的 token,使其下次心跳 CAS 失敗而停機。
+			//擁有權 key 用 "OWN-" 前綴,避開 New() 對 "SERVER-N-*" 的清理掃描。
+			c.Do("SET", s, time.Now().Unix())
+			c.Do("SET", ownerKeyOf(s), ownerToken)
+		}
 		//解鎖(只刪自己持有的鎖)
-		releaseLock(c, "STARTLOCK", token)
+		releaseLock(c, "STARTLOCK", lockToken)
 		c.Close()
 	}()
 
 	//確認同時間只有一台在啟動(TTL 鎖:持有者崩潰也會自動釋放,不會死鎖)
 	for {
-		ok, lerr := acquireLock(c, "STARTLOCK", token, 30000)
+		ok, lerr := acquireLock(c, "STARTLOCK", lockToken, 30000)
 		if lerr != nil {
-			return 0, "", lerr
+			return 0, "", ownerToken, lerr
 		}
 		if ok {
 			break
@@ -87,11 +97,12 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 	if err != nil {
 
 		if err == redis.ErrNil {
-			return incrServerNum(c)
+			num, name, e := incrServerNum(c)
+			return num, name, ownerToken, e
 		}
 	}
 
-	//正規式篩出 SERVER-1 排除 SERVER-1-123456
+	//正規式篩出 SERVER-1 排除 SERVER-1-123456 與 SERVER-1-OWN
 	serverlist := make([]string, 0)
 	for _, v := range replys {
 		if re.MatchString(v) {
@@ -103,7 +114,7 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 	for _, serverName := range serverlist {
 		lastTime, err := redis.Int64(c.Do("GET", serverName))
 		if err != nil {
-			return 0, "", err
+			return 0, "", ownerToken, err
 		}
 
 		tlastTime := time.Unix(lastTime, 0)
@@ -112,37 +123,48 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 		if now.Sub(tlastTime) > 30*time.Second {
 			ss := re.FindStringSubmatch(serverName)
 			if len(ss) != 2 {
-				return 0, "", errors.New("server name match error")
+				return 0, "", ownerToken, errors.New("server name match error")
 			}
 			num, err := strconv.Atoi(ss[1])
 			if err != nil {
-				return 0, "", err
+				return 0, "", ownerToken, err
 			}
 
-			return num, serverName, nil
+			return num, serverName, ownerToken, nil
 		}
 
 	}
-	return incrServerNum(c)
+	num, name, e := incrServerNum(c)
+	return num, name, ownerToken, e
 
 }
 
 func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRedis *redis.Pool) (quene Quene, err error) {
 
-	num, name, err := initName(delayRedis)
+	num, name, ownerToken, err := initName(delayRedis)
 	if err != nil {
 		return
 	}
 	go func() {
 		t := time.NewTicker(1 * time.Second)
-		for {
-			select {
-			case <-t.C:
-				func() {
-					conn := delayRedis.Get()
-					defer conn.Close()
-					conn.Do("SET", name, time.Now().Unix())
-				}()
+		defer t.Stop()
+		for range t.C {
+			superseded := func() bool {
+				conn := delayRedis.Get()
+				defer conn.Close()
+				ok, herr := redis.Int(heartbeatScript.Do(conn, ownerKeyOf(name), name, ownerToken, time.Now().Unix()))
+				if herr != nil {
+					// transient redis error: don't treat as supersession
+					return false
+				}
+				return ok == 0
+			}()
+			if superseded {
+				config.Logger.Errorf("server slot %s superseded by another node; stopping heartbeat to avoid snowflake node-id collision", name)
+				if config.OnSupersede != nil {
+					config.OnSupersede()
+				}
+				return
 			}
 		}
 	}()
@@ -247,7 +269,8 @@ type Config struct {
 	MachineMac                string
 	MachineIp                 string
 	JobReplyUrl               string
-	HistoryTTL                int // seconds; 0 disables execution-history recording
+	HistoryTTL                int       // seconds; 0 disables execution-history recording
+	OnSupersede               func()    // called when this node's slot is reclaimed by another (default: fatal exit)
 	Logger                    *logrus.Logger
 }
 

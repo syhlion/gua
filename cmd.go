@@ -298,7 +298,10 @@ func start(c *cli.Context) {
 		MachineHost: conf.Hostname,
 		JobReplyUrl: conf.JobReplyHook,
 		HistoryTTL:  conf.HistoryTTL,
-		Logger:      logger,
+		OnSupersede: func() {
+			logger.Fatal("server slot superseded by another node; exiting to avoid snowflake node-id collision")
+		},
+		Logger: logger,
 	}
 	quene, err := delayquene.New(dconf, groupRedis, readyRedis, delayRedis)
 	if err != nil {

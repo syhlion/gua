@@ -240,6 +240,53 @@ func TestPauseStopsDelivery(t *testing.T) {
 	}
 }
 
+// Slot fencing: a node whose slot is reclaimed (owner token overwritten) must
+// detect it and fire OnSupersede, instead of continuing with a colliding id.
+func TestSlotSupersedeDetected(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+	superseded := make(chan struct{}, 1)
+	cfg := &Config{
+		MachineHost: "h", MachineIp: "127.0.0.1", MachineMac: "m",
+		HistoryTTL:  0,
+		Logger:      testLogger(),
+		OnSupersede: func() {
+			select {
+			case superseded <- struct{}{}:
+			default:
+			}
+		},
+	}
+	delay := testPool(mr.Addr(), 2)
+	q, err := New(cfg, testPool(mr.Addr(), 3), testPool(mr.Addr(), 1), delay)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer q.Close()
+
+	// healthy node: heartbeat CAS succeeds, no false supersession
+	select {
+	case <-superseded:
+		t.Fatal("false supersession while still owning the slot")
+	case <-time.After(1500 * time.Millisecond):
+	}
+
+	// another node reclaims SERVER-1: overwrite the owner token
+	c := delay.Get()
+	defer c.Close()
+	if _, err := c.Do("SET", "OWN-SERVER-1", "intruder-token"); err != nil {
+		t.Fatalf("tamper: %v", err)
+	}
+	select {
+	case <-superseded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("supersession not detected after owner token overwritten")
+	}
+}
+
 // A fired job should leave a queryable execution-history record.
 func TestHistoryRecorded(t *testing.T) {
 	q := newTestQuene(t)
