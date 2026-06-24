@@ -1,7 +1,13 @@
 # gua: Redis → PostgreSQL (River) migration plan
 
-> **Status:** planned (not started).
-> **Base:** this repo, branch `harden`. Do the work on a `pg-store` branch off `harden`.
+> **Status:** in progress on branch `pg-store`. Phase 0 done; Phase 1 **core** proven
+> (groups + Push→Insert + delivery worker + recurring, all green against real Postgres
+> via River). Phase 1 remainder + Phases 2–7 pending.
+> **Base:** this repo, branch `harden`. Work is on the `pg-store` branch off `harden`.
+>
+> **Run the PG-backed tests:** start Postgres and point the tests at it:
+> `GUA_PG_DSN='postgres://USER:PASS@HOST:PORT/DB?sslmode=disable' go test ./delayquene/ -run TestRiver -v`
+> (without `GUA_PG_DSN` they skip; the Redis/miniredis suite is unaffected.)
 > **Decision (2026-06-24):** move gua's backing service from Redis to **PostgreSQL**,
 > using **River** (`github.com/riverqueue/river`). Binding to Postgres is accepted.
 > Self-contained — can be handed to a separate session.
@@ -70,14 +76,19 @@ queue. This is the one real seam River adoption introduces.
 
 ## Phases
 
-### Phase 0 — gate + baseline
+### Phase 0 — gate + baseline ✅ done
 Branch `pg-store` off `harden`; docker Postgres up; River + driver chosen
-(`riverpgxv5`).
+(`riverpgxv5`). `TestRiverSmoke` proves the migrate→insert→work stack against PG.
 
 ### Phase 1 — River-backed `Quene` (Redis impl untouched)
-River client + migrations (`river_job` etc.); a River Worker whose body is gua's
-existing delivery; `AddJob` → `Insert(ScheduledAt)`; cron → periodic. Config
-toggle (`redis` | `river`). Existing miniredis tests stay green.
+- [x] **core**: `riverquene.go` — `NewRiver` (migrate + `gua_groups` table + delivery
+  worker + Start); `Push` → `Insert(ScheduledAt)`; delivery worker reuses the
+  HTTP POST / gRPC `OnJobTrigger` envelope; recurring self-reschedules via
+  cron `Next()`. Tests `TestRiverHTTPDelivery / TestRiverRecurring / TestRiverGroups`
+  green against PG. Redis path untouched (miniredis suite still green).
+- [ ] config toggle in `cmd.go` (`redis` | `river`) + PG DSN env.
+- [ ] cron via River **PeriodicJobs** (currently re-insert on each fire — works, but
+  periodic is cleaner for fixed schedules).
 
 ### Phase 2 — map the rest of the `Quene` surface
 `Pause / Active / Delete / List / Stats / History` onto River — including the
