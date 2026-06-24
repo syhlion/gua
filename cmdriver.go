@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// startRiver runs gua against the Postgres/River backend (BACKEND=river).
+// startRiver runs gua against the Postgres/River backend.
 // It needs only GRPC_LISTEN, HTTP_LISTEN and PG_DSN — no Redis envs.
 func startRiver(c *cli.Context) {
 	if c.String("env-file") != "" {

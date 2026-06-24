@@ -22,7 +22,7 @@ const (
 
 // Job is the internal stored representation of a scheduled job.
 // request_url keeps the "HTTP@<target>" / "GRPC@<target>" form used by the
-// bucket/worker dispatch; the admin API exposes it as delivery + target.
+// worker dispatch; the admin API exposes it as delivery + target.
 type Job struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

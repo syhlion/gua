@@ -4,7 +4,7 @@ option go_package = "github.com/syhlion/gua/proto/guaproto";
 
 // Job is the internal stored representation of a scheduled job.
 // request_url keeps the "HTTP@<target>" / "GRPC@<target>" form used by the
-// bucket/worker dispatch; the admin API exposes it as delivery + target.
+// worker dispatch; the admin API exposes it as delivery + target.
 message Job {
    string name = 1;
    string Id = 2;

@@ -79,6 +79,9 @@ func TestRiverHTTPDelivery(t *testing.T) {
 		if env.JobId != "RJOB1" || env.Payload != "river-payload" || env.GroupName != "GRP" {
 			t.Fatalf("unexpected envelope: %+v", env)
 		}
+		if env.IdempotencyKey == "" {
+			t.Fatalf("missing idempotency_key in envelope: %+v", env)
+		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("river HTTP delivery did not fire within 15s")
 	}

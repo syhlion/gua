@@ -1,22 +1,32 @@
-gua-redis-for-api:
-    image: redis
-gua-redis-for-ready:
-    image: redis
-gua-redis-for-job:
-    image: redis
-gua-redis-for-group:
-    image: redis
-gua:
-    image: syhlion/gua
-    links: 
-        - gua-redis-for-api
-        - gua-redis-for-ready
-        - gua-redis-for-job
-        - gua-redis-for-group
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: gua
+      POSTGRES_DB: gua
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gua"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  gua:
+    build: ..
     command: start
-    env_file:
-        - ./docker-env.example
-    ports: 
-        - "6666:6666"
-        - "7777:7777"
-        - "8888:8888"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GRPC_LISTEN: ":6666"
+      HTTP_LISTEN: ":7777"
+      MACHINE_CODE: gua
+      PG_DSN: "postgres://postgres:gua@postgres:5432/gua?sslmode=disable"
+      GUA_HISTORY_TTL: "432000"
+      LOG_OUTPUT: stdout
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+    ports:
+      - "7777:7777"
+      - "6666:6666"

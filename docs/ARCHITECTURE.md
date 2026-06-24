@@ -18,7 +18,7 @@ over **HTTP POST or gRPC Push**. gua nodes are stateless and scale horizontally.
   `PauseJob`, `ActiveJob`, `DeleteJob`, `ListJobs` — HTTP REST (`/v1/...`) and
   the equivalent gRPC `GuaAdmin` service.
 - **Delivery** (gua → consumer, when a job fires): the same envelope
-  (`job_id, job_name, group_name, plan_time, exec_time, payload`) is sent as a
+  (`job_id, job_name, group_name, plan_time, exec_time, payload, idempotency_key`) is sent as a
   JSON `POST` (HTTP) or via `GuaCallback.OnJobTrigger` (gRPC Push). The
   consumer's `2xx` / `JobResult` is the execution result.
 - **Monitoring**: `GET /v1/status`, `GET /v1/{group}/history`, web console
@@ -37,8 +37,9 @@ next occurrence (cron `Next()`). A failed delivery is retried by River.
 
 - **Delivery is at-least-once**: River retries failures and rescues jobs from
   crashed workers, so a job can run more than once — **consumers must be
-  idempotent**. (`SKIP LOCKED` makes *dequeue* exactly-once; it's the
-  deliver-then-crash window that can re-deliver.)
+  idempotent**. Dedupe on the envelope's **`idempotency_key`** (stable across
+  re-deliveries of the same firing; `exec_time` is not). (`SKIP LOCKED` makes
+  *dequeue* exactly-once; it's the deliver-then-crash window that can re-deliver.)
 - **Timing**: jobs scheduled for the future are promoted by River's scheduler,
   which adds a few seconds of latency vs an in-memory ticker. For scheduling at
   minute/hour granularity this is irrelevant; for sub-second precision it is the

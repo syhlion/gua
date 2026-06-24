@@ -1,12 +1,10 @@
 # gua docker-compose
 
-simple start gua service
-
-## Usage
-
+Brings up Postgres + gua. River runs its own migrations on startup.
 
 ```
-$ docker-compose up
+docker compose up --build
 ```
 
-It will be start gua service
+- gua HTTP API on `:7777`, gRPC on `:6666`.
+- Quick check: `curl localhost:7777/version`, console at `http://localhost:7777/ui`.

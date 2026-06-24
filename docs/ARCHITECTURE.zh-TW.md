@@ -17,7 +17,7 @@ gua 是一套分散式、crontab 風格的排程器,後端為 PostgreSQL(透過
   `PauseJob`、`ActiveJob`、`DeleteJob`、`ListJobs` —— HTTP REST(`/v1/...`)與
   等價的 gRPC `GuaAdmin` service。
 - **投遞**(gua → 消費者,job 觸發時):同一份信封
-  (`job_id, job_name, group_name, plan_time, exec_time, payload`)以 JSON `POST`
+  (`job_id, job_name, group_name, plan_time, exec_time, payload, idempotency_key`)以 JSON `POST`
   (HTTP)或 `GuaCallback.OnJobTrigger`(gRPC Push)送出。消費者的 `2xx` /
   `JobResult` 即執行結果。
 - **監控**:`GET /v1/status`、`GET /v1/{group}/history`、Web console `GET /ui`。
@@ -34,8 +34,9 @@ gua 是一套分散式、crontab 風格的排程器,後端為 PostgreSQL(透過
 則用 cron `Next()` 重排下一個 occurrence。投遞失敗由 River 重試。
 
 - **投遞是 at-least-once**:River 會重試失敗、並把崩潰 worker 的 job 撿回,所以
-  一個 job 可能被投遞超過一次 —— **消費端必須冪等**。(`SKIP LOCKED` 讓「撈取」
-  是 exactly-once;會重投的是「投遞成功後、commit 前崩潰」那個窗口。)
+  一個 job 可能被投遞超過一次 —— **消費端必須冪等**。請對信封的
+  **`idempotency_key`** 去重(同一次觸發的重投間穩定;`exec_time` 不是)。
+  (`SKIP LOCKED` 讓「撈取」是 exactly-once;會重投的是「投遞成功後、commit 前崩潰」那個窗口。)
 - **時間特性**:排在未來的 job 由 River 的 scheduler 提升(promote),相對於
   in-memory ticker 會多幾秒延遲。對分鐘/小時級的排程無感;若要 sub-second 精度,
   這就是換取持久性的代價。實測數字見 [EVAL.zh-TW.md](../EVAL.zh-TW.md)。
