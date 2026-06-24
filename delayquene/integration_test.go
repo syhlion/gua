@@ -239,6 +239,24 @@ func TestPauseStopsDelivery(t *testing.T) {
 	}
 }
 
+// Stats reports cluster slot health and queue depth.
+func TestStats(t *testing.T) {
+	q := newTestQuene(t)
+	s, err := q.Stats()
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if len(s.Servers) < 1 {
+		t.Fatalf("expected >= 1 server slot, got %+v", s.Servers)
+	}
+	if !s.Servers[0].Alive {
+		t.Fatalf("freshly started server should be alive: %+v", s.Servers[0])
+	}
+	if s.ReadyQueueDepth < 0 || s.DownServerBacklog < 0 {
+		t.Fatalf("negative depths: %+v", s)
+	}
+}
+
 // List reflects pushed jobs; Delete removes them.
 func TestListAndDelete(t *testing.T) {
 	q := newTestQuene(t)

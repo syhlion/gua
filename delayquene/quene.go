@@ -262,6 +262,22 @@ type Quene interface {
 	Close()
 	RemoveGroup(groupName string) (err error)
 	ExistsGroup(groupName string) (exists int, err error)
+	Stats() (s *Stats, err error)
+}
+
+// ServerStat is the health of a single cluster slot (SERVER-N).
+type ServerStat struct {
+	Name          string `json:"name"`
+	LastHeartbeat int64  `json:"last_heartbeat"`
+	Alive         bool   `json:"alive"`
+}
+
+// Stats is a read-only snapshot of cluster + queue health for monitoring.
+type Stats struct {
+	Now               int64        `json:"now"`
+	ReadyQueueDepth   int          `json:"ready_queue_depth"`
+	DownServerBacklog int          `json:"down_server_backlog"`
+	Servers           []ServerStat `json:"servers"`
 }
 
 type q struct {
@@ -280,6 +296,45 @@ type q struct {
 
 func (t *q) Close() {
 	t.worker.Close()
+}
+
+// Stats returns a read-only health snapshot: ready-queue depth, the orphaned
+// bucket backlog, and every cluster slot with its last heartbeat (alive if it
+// beat within the 15s takeover window).
+func (t *q) Stats() (s *Stats, err error) {
+	now := time.Now().Unix()
+	s = &Stats{Now: now, Servers: []ServerStat{}}
+
+	rc := t.rpool.Get()
+	defer rc.Close()
+	if s.ReadyQueueDepth, err = redis.Int(rc.Do("LLEN", "GUA-READY-JOB")); err != nil {
+		return nil, err
+	}
+
+	dc := t.qpool.Get()
+	defer dc.Close()
+	if s.DownServerBacklog, err = redis.Int(dc.Do("LLEN", "down-server")); err != nil {
+		return nil, err
+	}
+	keys, err := RedisScan(dc, "SERVER-*")
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range keys {
+		if !re.MatchString(k) {
+			continue
+		}
+		last, gerr := redis.Int64(dc.Do("GET", k))
+		if gerr != nil {
+			continue
+		}
+		s.Servers = append(s.Servers, ServerStat{
+			Name:          k,
+			LastHeartbeat: last,
+			Alive:         now-last < 15,
+		})
+	}
+	return s, nil
 }
 
 func (t *q) GenerateUID() (s string) {

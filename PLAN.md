@@ -58,10 +58,10 @@
 - [x] 核心分支已覆蓋:到期推就緒、`@once`/cron 重入桶、pause、CRUD
 - [ ] (補)down-server 併桶接管、JobCheck 補單 專項測試 → 隨 Phase 6 補
 
-### Phase 5 — ★ Monitor Tier 1:唯讀狀態 API
-- [ ] 現況快照:job 狀態 / active / 下次執行時間
-- [ ] 佇列深度(`LLEN GUA-READY-JOB`)、叢集槽位健康(`SERVER-*`)、delay 統計
-- [ ] 純讀;同時作為 Phase 6 硬化的驗證工具
+### Phase 5 — ★ Monitor Tier 1:唯讀狀態 API — ✅ 完成
+- [x] `Quene.Stats()` + `GET /v1/status`:ready 佇列深度、down-server backlog、叢集槽位健康(SERVER-N + 心跳 + alive)
+- [x] job 狀態/active/下次執行時間 → 既有 `GET /v1/{group}/job/list`
+- [x] 純讀;TestStats 覆蓋;作為 Phase 6 硬化的驗證工具
 
 ### Phase 6 — 分散式安全性硬化(最高風險)+ 壓測驗收
 - [ ] `STARTLOCK`/`JOBCHECKLOCK` 換 TTL + owner token 鎖

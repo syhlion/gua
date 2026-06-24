@@ -319,6 +319,7 @@ func start(c *cli.Context) {
 	r := mux.NewRouter()
 	r.HandleFunc("/version", Version(version)).Methods("GET")
 	subRouter := r.PathPrefix("/v1/").Subrouter()
+	subRouter.HandleFunc("/status", httpv1.Status(quene)).Methods("GET")
 	subRouter.HandleFunc("/register/group", httpv1.RegisterGroup(quene)).Methods("POST")
 	subRouter.HandleFunc("/remove/group", httpv1.RemoveGroup(quene)).Methods("POST")
 	subRouter.HandleFunc("/add/job", httpv1.AddJob(quene)).Methods("POST")

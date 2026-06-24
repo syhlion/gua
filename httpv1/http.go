@@ -34,6 +34,19 @@ func Version(serverVersion string) func(w http.ResponseWriter, r *http.Request) 
 		restresp.Write(w, serverVersion, http.StatusOK)
 	}
 }
+// Status is a read-only monitoring endpoint: ready-queue depth, orphaned
+// bucket backlog, and per-slot cluster health.
+func Status(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s, err := quene.Stats()
+		if err != nil {
+			logger.Warnf("status error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		restresp.Write(w, s, http.StatusOK)
+	}
+}
 func Import(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
