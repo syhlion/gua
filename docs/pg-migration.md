@@ -133,14 +133,19 @@ Branch `pg-store` off `harden`; docker Postgres up; River + driver chosen
 - [x] verified: build/vet green, River suite green, PG-only binary exercised
   end-to-end (register → add → fire → history).
 
-### Phase 6 — data migration + cutover
-One-shot script: Redis in-flight jobs → `river.Insert`. Cutover + rollback
-runbook (keep the Redis branch).
+### Phase 6 — data migration + cutover — N/A for fresh deploy
+A fresh Postgres deployment needs no data migration. A one-shot Redis→PG import
+(read the Redis branch's buckets/jobs → `river.Insert` / `gua_jobs`) is only
+needed for an *in-place* cutover of a running Redis instance — write it then if
+that scenario arises.
 
-### Phase 7 — stress + acceptance + docs
-Re-run the stress harness (timing now bound by River + LISTEN, not the 700ms
-ticker — measure). Redraw the pipeline and **cluster** diagrams (the cluster one
-simplifies a lot — no slots/fencing). Update ARCHITECTURE.md / EVAL.md.
+### Phase 7 — stress + docs ✅ done
+- [x] `TestRiverStress` (gated by `GUA_STRESS`+`GUA_PG_DSN`): N same-instant jobs,
+  measures lateness p50/p95/p99/max + completeness. N=500/2000 → 0 missed, 0
+  duplicate; lateness ~3–6s (River scheduler promotion latency — see EVAL.md).
+- [x] diagrams redrawn for Postgres (architecture / pipeline / cluster — the
+  cluster one drops slots/fencing entirely).
+- [x] README / ARCHITECTURE / MONITORING / EVAL / CHANGELOG rewritten for PG.
 
 ## Acceptance
 

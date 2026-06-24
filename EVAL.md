@@ -34,44 +34,41 @@ envelope (or implement the gRPC `GuaCallback`), and drops OTP handling.
 
 ## Delivery semantics
 
-**At-least-once.** A cross-node dedup fence (`FENCE-<job>-<exectime>`) prevents
-the common duplicate sources (orphan-bucket reclaim, JobCheck re-push) from
-double-enqueuing the same firing, and stress runs show 0 duplicates to 5k
-concurrent — but consumers should still be **idempotent** for safety.
+**At-least-once.** `FOR UPDATE SKIP LOCKED` makes dequeue exactly-once across the
+fleet (stress runs show 0 duplicates to 2k same-instant jobs), but River retries
+failures and rescues jobs from crashed workers, so a job can still be *delivered*
+more than once — consumers must be **idempotent**.
 
-## Timing
+## Timing (Postgres / River)
 
-Resolution is bounded by the 700ms bucket ticker: unloaded lateness ≈
-`0–700ms + delivery latency`. Stress (single node, miniredis, HTTP delivery,
-resty client): same-second jobs, all to one host →
+Future-scheduled jobs are promoted by River's scheduler, which adds a few
+seconds of latency vs the old in-memory ticker. Stress (single node, HTTP
+delivery, real Postgres): N jobs at a common scheduled instant →
 
-| N | missed | dup | p99 | max |
-|---|---|---|---|---|
-| 2000 | 0 | 0 | ~0.71s | ~0.72s |
-| 5000 | 0 | 0 | ~2.4s | ~2.4s |
+| N | missed | dup | lateness p50 | p99 | max |
+|---|---|---|---|---|---|
+| 500 | 0 | 0 | ~3.0s | ~3.5s | ~3.5s |
+| 2000 | 0 | 0 | ~4.2s | ~6.3s | ~6.3s |
 
-Completeness + no-duplicate invariants hold throughout. At realistic load (the
-target use is *light*) timing sits at the ticker floor. The 5000-to-one-host
-tail is the per-host connection cap + resty per-request overhead under extreme
-synthetic fan-in — not representative of jobs spread across consumers. For
-sub-second precision, lower the ticker (`delayquene` `RunForDelayQuene`).
+Completeness + no-duplicate invariants hold throughout (`SKIP LOCKED`). The
+lateness is River's scheduler-promotion latency + draining N jobs through the
+worker pool — **not** missed fires. For jobs scheduled minutes/hours out this is
+irrelevant; if you need sub-second precision, Postgres/River is the wrong
+substrate (the Redis line on `harden` has a 700ms floor).
 
 ## Residual risks / follow-ups
 
-- **SERVER-N slot reuse** is now **fenced**: each slot carries an owner token
-  (`OWN-SERVER-N`); the heartbeat is a CAS that only refreshes while the token
-  matches. If another node reclaims the slot during a long pause, the original
-  node's next heartbeat (≤1s) sees the mismatch and fires `OnSupersede`
-  (production: fatal exit) instead of generating colliding snowflake ids.
-  Residual window: the ≤1s between a paused node resuming and its next
-  heartbeat tick — far tighter than the old unbounded risk.
-- **Redis is the single source of truth** — run it with persistence (AOF) and
-  treat the 4 logical DBs as one failure domain.
-- **`greq` / `requestwork.v2` → `resty`** ✅ done (separate commit). HTTP client
-  now `resty.dev/v3` via `internal/httpclient` (retry on network failure, 8MiB
-  response cap, keep-alive, per-host conn cap). resty v3 is a release candidate;
-  it shows higher per-request overhead than the archived greq under extreme
-  fan-in (see Timing) — revisit at resty GA if that load profile ever matters.
-- **Rollout:** deploy alongside JobScheduler, migrate one dependent at a time
-  (point its jobs at gua, update its callback), watch `/ui` + history; roll back
-  by repointing the dependent. No shared state between the two systems.
+- **Delivery is at-least-once** — `SKIP LOCKED` makes dequeue exactly-once, but a
+  worker crashing after delivering and before commit (or River's rescuer) can
+  re-deliver. Consumers must be **idempotent**.
+- **Future-job latency** (above) — a few seconds for River to promote scheduled
+  jobs. Acceptable for the target use; documented so nobody expects sub-second.
+- **River is pre-1.0** (`v0.x`) — actively maintained (MPL-2.0), but the API is
+  not frozen; pin the version and review on upgrade.
+- **Postgres is the single source of truth** — run it with the usual durability
+  (replication / backups). One database, one failure domain — but ACID, so no
+  custom recovery code.
+- **Rollout:** deploy alongside the old scheduler, migrate one dependent at a
+  time (point its jobs at gua, update its callback), watch `/ui` + history; roll
+  back by repointing the dependent. A fresh Postgres deployment needs no data
+  migration; only an in-place Redis→PG cutover would.

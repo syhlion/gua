@@ -1,5 +1,36 @@
 [unrelease]
 
+[v3.0.0] — Postgres / River (breaking)
+
+[Changed]
+
+* backing store moved from Redis to **PostgreSQL** via River
+  (`github.com/riverqueue/river`). gua is now a stateless horizontal scaler:
+  every node dequeues with `FOR UPDATE SKIP LOCKED`.
+* deleted the entire hand-rolled reliability layer that worked around Redis —
+  per-node buckets, ready queue, distributed locks, de-dup fence, JOB-*-scan /
+  JobCheck, down-server reclaim, and SERVER-N slot election + owner-token
+  fencing. Postgres row locks + River (retry, periodic, rescuer, leader
+  election) provide these.
+* env: 4 Redis groups collapsed to one `PG_DSN`. `BACKEND` toggle removed.
+
+[Added]
+
+* `gua_jobs` (definitions), `gua_groups`, `gua_executions` (history) tables;
+  `History` reads `gua_executions`; `Stats.ready_queue_depth` = pending River
+  occurrences (no slots).
+* retry/backoff on failed delivery (new — was fire-once before); River rescuer
+  re-runs jobs from crashed workers.
+* logging migrated logrus → `log/slog` with env output (stdout/file/both),
+  format/level, and lumberjack file rotation.
+* River stress/timing test; docs + diagrams redrawn for Postgres.
+
+[Notes]
+
+* delivery is at-least-once (retry/rescue) — consumers must be idempotent.
+* future-scheduled jobs have a few seconds of River scheduler latency (vs the
+  old 700ms ticker) — the trade-off for durability.
+
 [v2.0.0] — harden (breaking)
 
 [Changed]
