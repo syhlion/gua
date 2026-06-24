@@ -13,9 +13,8 @@ import (
 
 	"github.com/bwmarrin/snowflake"
 	"github.com/gomodule/redigo/redis"
-	"github.com/syhlion/greq"
+	"github.com/syhlion/gua/internal/httpclient"
 	guaproto "github.com/syhlion/gua/proto"
-	requestwork "github.com/syhlion/requestwork.v2"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -186,8 +185,7 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 	if err != nil {
 		return
 	}
-	work := requestwork.New(100)
-	client := greq.New(work, 60*time.Second, true)
+	client := httpclient.New(60*time.Second, false)
 	tt := time.Now().UnixNano()
 	ts := strconv.FormatInt(tt, 10)
 	conn = delayRedis.Get()

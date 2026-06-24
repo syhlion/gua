@@ -1,7 +1,6 @@
 package delayquene
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,12 +11,13 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/sirupsen/logrus"
-	"github.com/syhlion/greq"
+	"github.com/syhlion/gua/internal/httpclient"
 	"github.com/syhlion/gua/loghook"
 	guaproto "github.com/syhlion/gua/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/protobuf/proto"
+	"resty.dev/v3"
 )
 
 type Worker struct {
@@ -32,7 +32,7 @@ type Worker struct {
 	machineHost    string
 	machineMac     string
 	machineIp      string
-	httpClient     *greq.Client
+	httpClient     *resty.Client
 	bucketName     string
 	once1          *sync.Once
 	once2          *sync.Once
@@ -128,9 +128,8 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 				payload.Success = resp
 			}
 			b, _ := json.Marshal(payload)
-			br := bytes.NewReader(b)
 
-			_, _, err = t.httpClient.PostRaw(t.jobReplyUrl, br)
+			_, _, err = httpclient.PostRaw(t.httpClient, t.jobReplyUrl, b)
 			if err != nil {
 				t.logger.WithError(err).Errorf("job reply reqeust err. job: %#v. payload: %#v", job, payload)
 			}
@@ -182,7 +181,7 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 	switch cmdType {
 	case "HTTP":
 		body, _ := json.Marshal(env)
-		respBody, status, herr := t.httpClient.PostRaw(ss[2], bytes.NewReader(body))
+		respBody, status, herr := httpclient.PostRaw(t.httpClient, ss[2], body)
 		if herr != nil {
 			t.logger.WithError(herr).Errorf("http callback error. job:%#v", job)
 			return herr

@@ -78,7 +78,7 @@
 ### Phase 8 — 取代評估 + 遷移計畫(從簡)— ✅ 完成
 - [x] `EVAL.md`:功能對位、消費者破壞性變更清單、at-least-once/timing、殘留風險、上線/回退
 - [x] 文件刷新:README/apiv1.md 改為新模型;刪 luamode.md/funclua.md/benchmark(過時)
-- [x] 記錄殘留:SERVER-N 完整 fencing、greq→resty 替換(獨立任務)
+- [x] 記錄殘留:SERVER-N 完整 fencing(greq→resty 已於獨立 commit 完成)
 
 ---
 
