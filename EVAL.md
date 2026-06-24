@@ -1,5 +1,7 @@
 # gua as a JobScheduler replacement — evaluation & migration
 
+> 🌐 **English** · [繁體中文](EVAL.zh-TW.md)
+
 Light evaluation (JobScheduler usage is small; breaking changes are acceptable).
 
 ## Feature parity

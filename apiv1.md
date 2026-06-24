@@ -1,5 +1,7 @@
 # gua admin API (v1)
 
+> 🌐 **English** · [繁體中文](apiv1.zh-TW.md)
+
 Base path `/v1`. Bodies are JSON. Responses are wrapped as `{"success": ...}`.
 There is no app-level auth (see [EVAL.md](./EVAL.md)); protect at the transport
 layer (network policy / mTLS / gateway) as needed.

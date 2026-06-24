@@ -1,5 +1,7 @@
 # gua monitoring
 
+> 🌐 **English** · [繁體中文](MONITORING.zh-TW.md)
+
 Three read paths, all served from the HTTP listener.
 
 ## `GET /v1/status` — queue health

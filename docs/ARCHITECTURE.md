@@ -1,5 +1,7 @@
 # gua architecture (PostgreSQL / River)
 
+> 🌐 **English** · [繁體中文](ARCHITECTURE.zh-TW.md)
+
 gua is a distributed, crontab-style scheduler backed by PostgreSQL via
 [River](https://riverqueue.com). Clients register jobs over **HTTP REST or
 gRPC**; when a job fires gua delivers a **trigger envelope** to the consumer
