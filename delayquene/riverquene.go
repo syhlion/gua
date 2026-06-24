@@ -28,6 +28,7 @@ type RiverConfig struct {
 	MachineHost string
 	MachineMac  string
 	MachineIp   string
+	HistoryTTL  int // seconds; 0 disables execution-history recording
 	Logger      *logrus.Logger
 }
 
@@ -54,8 +55,33 @@ type guaDeliverWorker struct {
 	machineHost string
 	machineMac  string
 	machineIp   string
+	historyTTL  int
 	logger      *logrus.Logger
 	insertNext  func(ctx context.Context, args guaJobArgs, at time.Time) error
+}
+
+// recordExecution appends one execution record (Monitor Tier 2) and prunes the
+// retention window. No-op when history is disabled.
+func (w *guaDeliverWorker) recordExecution(ctx context.Context, a guaJobArgs, execTime int64, resp string, derr error) {
+	if w.historyTTL <= 0 {
+		return
+	}
+	cmdType := "HTTP"
+	if ss := UrlRe.FindStringSubmatch(a.RequestUrl); len(ss) > 0 {
+		cmdType = ss[1]
+	}
+	var errStr, msg string
+	if derr != nil {
+		errStr = derr.Error()
+	} else {
+		msg = resp
+	}
+	finish := time.Now().Unix()
+	w.pool.Exec(ctx, `INSERT INTO gua_executions
+		(job_id, group_name, type, plan_time, exec_time, finish_time, success, message, error, exec_machine_host)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		a.JobId, a.GroupName, cmdType, a.PlanTime, execTime, finish, derr == nil, msg, errStr, w.machineHost)
+	w.pool.Exec(ctx, `DELETE FROM gua_executions WHERE created_at < now() - make_interval(secs => $1)`, w.historyTTL)
 }
 
 // jobActive reports whether the job's definition still exists and is active.
@@ -72,9 +98,12 @@ func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs])
 	if !w.jobActive(ctx, a.JobId) {
 		return nil
 	}
-	if err := deliver(ctx, w.httpClient, a); err != nil {
-		w.logger.WithError(err).Errorf("river delivery error job %s", a.JobId)
-		return err // River retries per MaxAttempts/backoff
+	execTime := time.Now().Unix()
+	resp, derr := deliver(ctx, w.httpClient, a)
+	w.recordExecution(ctx, a, execTime, resp, derr)
+	if derr != nil {
+		w.logger.WithError(derr).Errorf("river delivery error job %s", a.JobId)
+		return derr // River retries per MaxAttempts/backoff
 	}
 	// fire-once: drop the definition after delivery (matches the Redis backend)
 	if a.IntervalPattern == "" || a.IntervalPattern == "@once" {
@@ -98,12 +127,13 @@ func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs])
 	return nil
 }
 
-// deliver sends the trigger envelope to the consumer. Self-contained (kept
-// separate from the Redis worker so that path is untouched).
-func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs) error {
+// deliver sends the trigger envelope to the consumer and returns the result
+// message. Self-contained (kept separate from the Redis worker so that path is
+// untouched).
+func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs) (string, error) {
 	ss := UrlRe.FindStringSubmatch(a.RequestUrl)
 	if len(ss) == 0 {
-		return fmt.Errorf("invalid request_url %q", a.RequestUrl)
+		return "", fmt.Errorf("invalid request_url %q", a.RequestUrl)
 	}
 	env := TriggerEnvelope{
 		JobId:     a.JobId,
@@ -116,14 +146,14 @@ func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs) error 
 	switch ss[1] {
 	case "HTTP":
 		body, _ := json.Marshal(env)
-		_, status, err := httpclient.PostRaw(httpClient, ss[2], body)
+		respBody, status, err := httpclient.PostRaw(httpClient, ss[2], body)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if status >= 400 {
-			return fmt.Errorf("http callback status %d", status)
+			return "", fmt.Errorf("http callback status %d", status)
 		}
-		return nil
+		return string(respBody), nil
 	case "GRPC":
 		timeout := time.Duration(a.Timeout) * time.Second
 		if timeout <= 0 {
@@ -131,7 +161,7 @@ func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs) error 
 		}
 		conn, err := grpc.Dial(ss[2], grpc.WithInsecure())
 		if err != nil {
-			return err
+			return "", err
 		}
 		defer conn.Close()
 		cctx, cancel := context.WithTimeout(ctx, timeout)
@@ -141,14 +171,18 @@ func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs) error 
 			PlanTime: env.PlanTime, ExecTime: env.ExecTime, Payload: env.Payload,
 		})
 		if err != nil {
-			return err
+			return "", err
 		}
 		if res != nil && !res.Success {
-			return fmt.Errorf("grpc callback reported failure: %s", res.Message)
+			return "", fmt.Errorf("grpc callback reported failure: %s", res.Message)
 		}
-		return nil
+		msg := ""
+		if res != nil {
+			msg = res.Message
+		}
+		return msg, nil
 	default:
-		return fmt.Errorf("unsupported request type %q", ss[1])
+		return "", fmt.Errorf("unsupported request type %q", ss[1])
 	}
 }
 
@@ -202,6 +236,23 @@ func NewRiver(cfg *RiverConfig) (Quene, error) {
 		pool.Close()
 		return nil, err
 	}
+	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS gua_executions (
+		seq               bigserial PRIMARY KEY,
+		job_id            text NOT NULL,
+		group_name        text NOT NULL,
+		type              text NOT NULL,
+		plan_time         bigint NOT NULL,
+		exec_time         bigint NOT NULL,
+		finish_time       bigint NOT NULL,
+		success           boolean NOT NULL,
+		message           text NOT NULL DEFAULT '',
+		error             text NOT NULL DEFAULT '',
+		exec_machine_host text NOT NULL DEFAULT '',
+		created_at        timestamptz NOT NULL DEFAULT now());
+		CREATE INDEX IF NOT EXISTS gua_exec_group_idx ON gua_executions (group_name, seq DESC);`); err != nil {
+		pool.Close()
+		return nil, err
+	}
 
 	work := &guaDeliverWorker{
 		pool:        pool,
@@ -209,6 +260,7 @@ func NewRiver(cfg *RiverConfig) (Quene, error) {
 		machineHost: cfg.MachineHost,
 		machineMac:  cfg.MachineMac,
 		machineIp:   cfg.MachineIp,
+		historyTTL:  cfg.HistoryTTL,
 		logger:      cfg.Logger,
 	}
 	workers := river.NewWorkers()
@@ -451,7 +503,25 @@ func (q *riverQuene) Stats() (*Stats, error) {
 	return s, err
 }
 
-// History — Phase 4 (PG executions table). Empty for now.
 func (q *riverQuene) History(group string, limit int) ([]*HistoryEntry, error) {
-	return []*HistoryEntry{}, nil
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	rows, err := q.pool.Query(context.Background(), `SELECT seq, job_id, group_name, type,
+		plan_time, exec_time, finish_time, success, message, error, exec_machine_host
+		FROM gua_executions WHERE group_name=$1 ORDER BY seq DESC LIMIT $2`, group, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]*HistoryEntry, 0)
+	for rows.Next() {
+		e := &HistoryEntry{}
+		if err := rows.Scan(&e.Seq, &e.JobId, &e.GroupName, &e.Type, &e.PlanTime,
+			&e.ExecTime, &e.FinishTime, &e.Success, &e.Message, &e.Error, &e.ExecMachineHost); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

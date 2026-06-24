@@ -102,15 +102,24 @@ Branch `pg-store` off `harden`; docker Postgres up; River + driver chosen
   Tests: `TestRiverListDelete`, `TestRiverPause` (green against PG).
 - [ ] `History` → Phase 4 (PG executions table); currently returns empty.
 
-### Phase 3 — tests
-Re-point the integration tests (`newTestQuene`) to the River backend
-(testcontainers / local PG). Add: crash-mid-process → rescuer re-runs (the
-headline "job not lost"); multi-instance SKIP LOCKED no double-run;
-retry/backoff; cron next-run.
+### Phase 3 — tests ✅ (mostly)
+- [x] River-backed tests against real PG: `TestRiverHTTPDelivery / Recurring /
+  ListDelete / Pause / Groups / History`.
+- [x] **no double-run**: `TestRiverNoDuplicate` (30 same-time jobs each fire
+  exactly once via SKIP LOCKED).
+- [x] **retry/backoff**: `TestRiverRetry` (fail once → River retries → succeed).
+- [ ] crash-mid-process → **River rescuer** re-runs: rescuer is built in
+  (`RescueStuckJobsAfter`); a cheap in-process kill test is awkward, so this
+  relies on River's own guarantee. Add a slow/manual test before cutover.
 
-### Phase 4 — monitoring on PG
-`history` from River completed jobs (or `executions` table); `status` from River
-stats with the slot section removed; adjust `/ui` (or surface River's own web UI).
+### Phase 4 — monitoring on PG ✅ done
+- [x] `gua_executions` table; the worker records every attempt (success/fail,
+  message/error, timings, host) and prunes to `GUA_HISTORY_TTL` (default 5 days,
+  0 disables). `History` reads it newest-first.
+- [x] `Stats`: `ready_queue_depth` = count of pending River occurrences; the
+  slot/`servers[]` section is empty (no slots on PG).
+- [x] `/ui`, `/v1/status`, `/v1/{group}/history` work unchanged over the River
+  backend (same handlers, same `Quene` interface).
 
 ### Phase 5 — delete compensation code + drop Redis  ← **gate: only after River is proven**
 Delete the Redis `Quene` impl + bucket / lock / scan / JobCheck / down-server /

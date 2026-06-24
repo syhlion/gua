@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -40,11 +41,18 @@ func startRiver(c *cli.Context) {
 	ip, _ := GetExternalIP()
 	mac, _ := GetMacAddr()
 
+	historyTTL := 5 * 24 * 3600
+	if v := os.Getenv("GUA_HISTORY_TTL"); v != "" {
+		if n, perr := strconv.Atoi(v); perr == nil {
+			historyTTL = n
+		}
+	}
 	quene, err := delayquene.NewRiver(&delayquene.RiverConfig{
 		DSN:         dsn,
 		MachineHost: host,
 		MachineIp:   ip,
 		MachineMac:  mac,
+		HistoryTTL:  historyTTL,
 		Logger:      logger,
 	})
 	if err != nil {

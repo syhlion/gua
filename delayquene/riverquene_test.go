@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -37,11 +38,13 @@ func newRiverTestQuene(t *testing.T) Quene {
 	pool.Exec(ctx, `TRUNCATE river_job`)
 	pool.Exec(ctx, `DROP TABLE IF EXISTS gua_jobs`)
 	pool.Exec(ctx, `DROP TABLE IF EXISTS gua_groups`)
+	pool.Exec(ctx, `DROP TABLE IF EXISTS gua_executions`)
 	pool.Close()
 
 	q, err := NewRiver(&RiverConfig{
 		DSN: dsn, MachineHost: "t", MachineIp: "127.0.0.1", MachineMac: "m",
-		Logger: testLogger(),
+		HistoryTTL: 3600,
+		Logger:     testLogger(),
 	})
 	if err != nil {
 		t.Fatalf("NewRiver: %v", err)
@@ -183,6 +186,142 @@ func TestRiverPause(t *testing.T) {
 	mu.Unlock()
 	if after-before > 1 { // allow one in-flight racing the pause
 		t.Fatalf("deliveries continued after pause: before=%d after=%d", before, after)
+	}
+}
+
+// A fired job leaves a queryable execution-history record in Postgres.
+func TestRiverHistory(t *testing.T) {
+	q := newRiverTestQuene(t)
+	if err := q.RegisterGroup("GRP"); err != nil {
+		t.Fatalf("RegisterGroup: %v", err)
+	}
+	got := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case got <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	if err := q.Push(httpJob("GRP", "RHIST", srv.URL, "h", "@once")); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	select {
+	case <-got:
+	case <-time.After(15 * time.Second):
+		t.Fatal("job never fired")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		hist, err := q.History("GRP", 10)
+		if err != nil {
+			t.Fatalf("History: %v", err)
+		}
+		if len(hist) >= 1 {
+			h := hist[0]
+			if h.JobId != "RHIST" || !h.Success || h.Type != "HTTP" {
+				t.Fatalf("unexpected history entry: %+v", h)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("history not recorded")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// Many same-time jobs must each fire exactly once (SKIP LOCKED, no double-run).
+func TestRiverNoDuplicate(t *testing.T) {
+	q := newRiverTestQuene(t)
+	if err := q.RegisterGroup("GRP"); err != nil {
+		t.Fatalf("RegisterGroup: %v", err)
+	}
+	const n = 30
+	var mu sync.Mutex
+	seen := map[string]int{}
+	done := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var env TriggerEnvelope
+		json.NewDecoder(r.Body).Decode(&env)
+		mu.Lock()
+		seen[env.JobId]++
+		if len(seen) == n {
+			select {
+			case done <- struct{}{}:
+			default:
+			}
+		}
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	for i := 0; i < n; i++ {
+		job := httpJob("GRP", "ND"+strconv.Itoa(i), srv.URL, "x", "@once")
+		if err := q.Push(job); err != nil {
+			t.Fatalf("Push %d: %v", i, err)
+		}
+	}
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		mu.Lock()
+		c := len(seen)
+		mu.Unlock()
+		t.Fatalf("only %d/%d distinct jobs fired", c, n)
+	}
+	time.Sleep(1 * time.Second) // let any straggler duplicate arrive
+	mu.Lock()
+	defer mu.Unlock()
+	for id, c := range seen {
+		if c != 1 {
+			t.Fatalf("job %s fired %d times, want exactly 1", id, c)
+		}
+	}
+}
+
+// A delivery that fails once is retried by River until it succeeds.
+func TestRiverRetry(t *testing.T) {
+	q := newRiverTestQuene(t)
+	if err := q.RegisterGroup("GRP"); err != nil {
+		t.Fatalf("RegisterGroup: %v", err)
+	}
+	var mu sync.Mutex
+	attempts := 0
+	ok := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		first := attempts == 1
+		mu.Unlock()
+		if first {
+			w.WriteHeader(http.StatusInternalServerError) // fail the first attempt
+			return
+		}
+		select {
+		case ok <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	if err := q.Push(httpJob("GRP", "RETRY", srv.URL, "x", "@once")); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	select {
+	case <-ok:
+	case <-time.After(25 * time.Second):
+		t.Fatal("job did not succeed via retry")
+	}
+	mu.Lock()
+	a := attempts
+	mu.Unlock()
+	if a < 2 {
+		t.Fatalf("expected >=2 attempts (fail then succeed), got %d", a)
 	}
 }
 
