@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/syhlion/gua/loghook"
 	guaproto "github.com/syhlion/gua/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -42,6 +44,29 @@ type Worker struct {
 	closeSign            []chan int
 	closeSignForJobcheck chan int
 	wait                 sync.WaitGroup
+
+	grpcMu    sync.Mutex
+	grpcConns map[string]*grpc.ClientConn
+}
+
+// grpcConn returns a cached gRPC client connection for addr, dialing once and
+// reusing it across fires (avoids a Dial+TCP+handshake per job).
+func (t *Worker) grpcConn(addr string) (*grpc.ClientConn, error) {
+	t.grpcMu.Lock()
+	defer t.grpcMu.Unlock()
+	if c, ok := t.grpcConns[addr]; ok {
+		if c.GetState() != connectivity.Shutdown {
+			return c, nil
+		}
+		c.Close()
+		delete(t.grpcConns, addr)
+	}
+	c, err := grpc.Dial(addr, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	t.grpcConns[addr] = c
+	return c, nil
 }
 
 func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
@@ -153,12 +178,11 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 		if timeout <= 0 {
 			timeout = 5 * time.Second
 		}
-		conn, derr := grpc.Dial(ss[2], grpc.WithInsecure())
+		conn, derr := t.grpcConn(ss[2])
 		if derr != nil {
 			t.logger.WithError(derr).Errorf("grpc dial error. addr:%s. job:%#v", ss[2], job)
 			return derr
 		}
-		defer conn.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		res, gerr := guaproto.NewGuaCallbackClient(conn).OnJobTrigger(ctx, &guaproto.JobTrigger{
@@ -249,6 +273,12 @@ func (t *Worker) Close() {
 	conn := t.bucket.rpool.Get()
 	conn.Do("DEL", t.realServerName)
 	conn.Close()
+	t.grpcMu.Lock()
+	for _, c := range t.grpcConns {
+		c.Close()
+	}
+	t.grpcConns = map[string]*grpc.ClientConn{}
+	t.grpcMu.Unlock()
 	t.wait.Wait()
 }
 func (t *Worker) RunForReadQuene() {
@@ -391,13 +421,27 @@ func (t *Worker) DelayQueneHandler(ti time.Time, realBucketName string) (err err
 				return
 			}
 
+			// dedup fence:跨節點確保同一 occurrence 只入就緒佇列一次
+			// (down-server 併桶接管 / JobCheck 補單都可能重推同一筆)。
 			c := t.rpool.Get()
-			_, err = c.Do("RPUSH", "GUA-READY-JOB", b)
-			c.Close()
-			if err != nil {
-				t.logger.WithError(err).Errorf("push to ready redis error job %v", job)
-				return
+			fenceKey := "FENCE-" + bi.JobId + "-" + strconv.FormatInt(job.Exectime, 10)
+			fenceTTL := (int(job.Timeout) + 60) * 1000
+			enqueue, ferr := acquireLock(c, fenceKey, "1", fenceTTL)
+			if ferr != nil {
+				// fence 失敗時保守推送(維持 at-least-once)
+				enqueue = true
+				t.logger.WithError(ferr).Errorf("dedup fence error job %v", job)
 			}
+			if enqueue {
+				if _, err = c.Do("RPUSH", "GUA-READY-JOB", b); err != nil {
+					c.Close()
+					t.logger.WithError(err).Errorf("push to ready redis error job %v", job)
+					return
+				}
+			} else {
+				t.logger.Infof("dedup: occurrence already enqueued, skip %s@%d", bi.JobId, job.Exectime)
+			}
+			c.Close()
 
 			//check delay
 			planTime := time.Unix(job.Exectime, 0)

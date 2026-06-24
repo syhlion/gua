@@ -35,30 +35,35 @@ func (b *Bucket) Push(key string, timestamp int64, jobId string) (err error) {
 }
 func (b *Bucket) JobCheck(key string, now time.Time, machineHost string) (err error) {
 	c := b.rpool.Get()
-	//redis lock 確保同時間只有一台執行
+	token := newToken()
+	//redis TTL 鎖確保同時間只有一台執行;持有者崩潰會自動釋放,不會死鎖
 	defer func() {
-		_, err = c.Do("DEL", "JOBCHECKLOCK")
-		if err != nil {
-			b.logger.WithError(err).Error("DEL JOBCHECK error")
-		}
+		releaseLock(c, "JOBCHECKLOCK", token)
 		c.Close()
-		return
 	}()
 	var i = 0
-	var check = 0
 	t := time.NewTimer(1 * time.Second)
+	defer t.Stop()
+	gotLock := false
 	for {
-		//搶鎖 & 上鎖
-		check, err = redis.Int(c.Do("SETNX", "JOBCHECKLOCK", 1))
-		if err != nil {
-			return err
+		ok, lerr := acquireLock(c, "JOBCHECKLOCK", token, 60000)
+		if lerr != nil {
+			return lerr
 		}
-		if check == 1 || i >= 20 {
+		if ok {
+			gotLock = true
+			break
+		}
+		if i >= 20 {
 			break
 		}
 		<-t.C
 		t.Reset(1 * time.Second)
 		i++
+	}
+	if !gotLock {
+		// 另一台正在跑 JobCheck,本輪跳過(舊版會無鎖硬跑,已修正)
+		return nil
 	}
 	jobCheckStart := time.Now()
 

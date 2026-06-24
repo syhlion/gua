@@ -16,6 +16,7 @@ import (
 	"github.com/syhlion/greq"
 	guaproto "github.com/syhlion/gua/proto"
 	requestwork "github.com/syhlion/requestwork.v2"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -62,23 +63,23 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 
 	now := time.Now()
 	c := pool.Get()
+	token := newToken()
 
 	defer func() {
 		//先做第一次時間更新
 		c.Do("SET", s, time.Now().UnixNano())
-		//解鎖
-		c.Do("DEL", "STARTLOCK")
+		//解鎖(只刪自己持有的鎖)
+		releaseLock(c, "STARTLOCK", token)
 		c.Close()
 	}()
 
-	//確認同時間只有一台在啟動
+	//確認同時間只有一台在啟動(TTL 鎖:持有者崩潰也會自動釋放,不會死鎖)
 	for {
-		//搶鎖 & 上鎖
-		check, err := redis.Int(c.Do("SETNX", "STARTLOCK", 1))
-		if err != nil {
-			return 0, "", err
+		ok, lerr := acquireLock(c, "STARTLOCK", token, 30000)
+		if lerr != nil {
+			return 0, "", lerr
 		}
-		if check == 1 {
+		if ok {
 			break
 		}
 		time.Sleep(1 * time.Second)
@@ -107,7 +108,9 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 		}
 
 		tlastTime := time.Unix(lastTime, 0)
-		if now.Sub(tlastTime) > 15*time.Second {
+		// 30s 接管窗口(心跳每 1s,留較大安全邊際以縮小活著的節點被誤判接管、
+		// 進而 snowflake node-id 撞號的風險)。startup 由 STARTLOCK 序列化。
+		if now.Sub(tlastTime) > 30*time.Second {
 			ss := re.FindStringSubmatch(serverName)
 			if len(ss) != 2 {
 				return 0, "", errors.New("server name match error")
@@ -213,6 +216,7 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 		logger:               config.Logger,
 		closeSign:            make([]chan int, bucketSize),
 		closeSignForJobcheck: make(chan int, 1),
+		grpcConns:            make(map[string]*grpc.ClientConn),
 	}
 	bucketChan := worker.GenerateBucketName()
 	worker.bucketNameChan = bucketChan
