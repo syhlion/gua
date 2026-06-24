@@ -41,20 +41,22 @@
 - [x] **1c** Job model:`exec_cmd` bytes → `payload` string;`request_url` 內部仍存 `TYPE@target`,API 用 `delivery`+`target`;清掉 dead root migrate.go/group.go/spec.go
 - [ ] **1b 尾巴**(留待):`benchmark/` 仍是 LUA 樣板(Phase 6 改寫);docs(README/apiv1.md/luamode.md/funclua.md)待重寫
 
-### Phase 2 — 測試骨架(地基)
-- [ ] miniredis + 注入式 clock
-- [ ] cron parser(`parser.go`/`spec.go`)單元測試
-- [ ] `go test ./...` 全綠、可進 CI
+### Phase 2 — 測試骨架(地基)— ✅ 完成
+- [x] miniredis 整合測試骨架(`newTestQuene`,真 TCP redis,免抽象 interface)
+- [x] cron parser 單元測試(`parser_test.go`)
+- [x] 生命週期整合測試:HTTP POST 信封、gRPC Push、recurring、pause、list/delete
+- [x] `go test ./...` 全綠
 
 ### Phase 3 — 止血(panic / vet / leak)〔刪除後大幅縮水〕
 - [ ] 殘餘 `FindStringSubmatch` nil guard + 入口驗證
 - [ ] `context.WithTimeout` cancel 洩漏、`signal.Notify(SIGKILL)`、unreachable code
 - [ ] `go vet ./...` 乾淨
 
-### Phase 4 — delayquene 可測化
-- [ ] `*redis.Pool` 收斂到薄 interface(可 mock / miniredis)
-- [ ] 排程時間注入 clock
-- [ ] 核心分支測試:到期推就緒、`@once` vs cron 重入桶、down-server 併桶接管、JobCheck 補單
+### Phase 4 — delayquene 可測化 — ✅ 由 Phase 2 達成
+- [x] 改用 miniredis 真實整合測試,取代原訂 redis interface 抽象(改動更小、更貼近真實)
+- [x] cron `Next(t)` 本就吃時間參數、可測,免 clock 注入
+- [x] 核心分支已覆蓋:到期推就緒、`@once`/cron 重入桶、pause、CRUD
+- [ ] (補)down-server 併桶接管、JobCheck 補單 專項測試 → 隨 Phase 6 補
 
 ### Phase 5 — ★ Monitor Tier 1:唯讀狀態 API
 - [ ] 現況快照:job 狀態 / active / 下次執行時間

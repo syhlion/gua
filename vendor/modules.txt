@@ -1,3 +1,13 @@
+# github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a
+## explicit
+github.com/alicebob/gopher-json
+# github.com/alicebob/miniredis/v2 v2.30.4
+## explicit; go 1.14
+github.com/alicebob/miniredis/v2
+github.com/alicebob/miniredis/v2/geohash
+github.com/alicebob/miniredis/v2/hyperloglog
+github.com/alicebob/miniredis/v2/metro
+github.com/alicebob/miniredis/v2/server
 # github.com/bwmarrin/snowflake v0.3.0
 ## explicit
 github.com/bwmarrin/snowflake
@@ -54,6 +64,12 @@ github.com/syhlion/restresp
 # github.com/urfave/cli v1.22.12
 ## explicit; go 1.11
 github.com/urfave/cli
+# github.com/yuin/gopher-lua v1.1.0
+## explicit; go 1.17
+github.com/yuin/gopher-lua
+github.com/yuin/gopher-lua/ast
+github.com/yuin/gopher-lua/parse
+github.com/yuin/gopher-lua/pm
 # golang.org/x/net v0.7.0
 ## explicit; go 1.17
 golang.org/x/net/http/httpguts
