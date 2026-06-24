@@ -392,7 +392,7 @@ func start(c *cli.Context) {
 	shutdow_observer := make(chan os.Signal, 1)
 	t := template.Must(template.New("gua start msg").Parse(guaMsgFormat))
 	t.Execute(os.Stdout, conf)
-	signal.Notify(shutdow_observer, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(shutdow_observer, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-shutdow_observer:
 		logger.Info("receive signal")

@@ -113,6 +113,10 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 
 	}()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
+	if len(ss) == 0 {
+		t.logger.Errorf("invalid request_url %q. job:%#v", job.RequestUrl, job)
+		return fmt.Errorf("invalid request_url %q", job.RequestUrl)
+	}
 
 	st := execTime.Sub(planTime)
 	if st > 2*time.Second {
