@@ -10,11 +10,11 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/riverqueue/river v0.39.0
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.39.0
-	github.com/sirupsen/logrus v1.9.0
 	github.com/syhlion/restresp v0.0.0-20170323032640-7fe232e5b740
 	github.com/urfave/cli v1.22.12
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.28.1
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	resty.dev/v3 v3.0.0-rc.2
 )
 

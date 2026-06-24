@@ -11,7 +11,6 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
 	"github.com/syhlion/gua/delayquene"
 	"github.com/syhlion/gua/httpv1"
 	guaproto "github.com/syhlion/gua/proto"
@@ -23,19 +22,20 @@ import (
 // startRiver runs gua against the Postgres/River backend (BACKEND=river).
 // It needs only GRPC_LISTEN, HTTP_LISTEN and PG_DSN — no Redis envs.
 func startRiver(c *cli.Context) {
-	logger = logrus.New()
 	if c.String("env-file") != "" {
 		if err := godotenv.Load(c.String("env-file")); err != nil {
-			logger.Fatal(err)
+			// logger not built yet (it may read LOG_* from the env file)
+			os.Stderr.WriteString("load env-file failed: " + err.Error() + "\n")
+			os.Exit(1)
 		}
 	}
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger = setupLogger()
 
 	grpcListen := os.Getenv("GRPC_LISTEN")
 	httpListen := os.Getenv("HTTP_LISTEN")
 	dsn := os.Getenv("PG_DSN")
 	if grpcListen == "" || httpListen == "" || dsn == "" {
-		logger.Fatal("river backend requires GRPC_LISTEN, HTTP_LISTEN and PG_DSN")
+		logFatal(logger, "river backend requires GRPC_LISTEN, HTTP_LISTEN and PG_DSN")
 	}
 	host, _ := GetHostname()
 	ip, _ := GetExternalIP()
@@ -56,7 +56,7 @@ func startRiver(c *cli.Context) {
 		Logger:      logger,
 	})
 	if err != nil {
-		logger.Fatal(err)
+		logFatal(logger, "startup error", "error", err)
 	}
 	defer quene.Close()
 
@@ -64,7 +64,7 @@ func startRiver(c *cli.Context) {
 
 	apiListener, err := net.Listen("tcp", grpcListen)
 	if err != nil {
-		logger.Fatal(err)
+		logFatal(logger, "startup error", "error", err)
 	}
 	grpcServer := grpc.NewServer()
 	guaproto.RegisterGuaAdminServer(grpcServer, &GuaAdmin{quene: quene})
@@ -72,7 +72,7 @@ func startRiver(c *cli.Context) {
 
 	httpListener, err := net.Listen("tcp", httpListen)
 	if err != nil {
-		logger.Fatal(err)
+		logFatal(logger, "startup error", "error", err)
 	}
 	server := http.Server{
 		ReadTimeout: 3 * time.Second,
@@ -84,15 +84,15 @@ func startRiver(c *cli.Context) {
 	go func() { httpErr <- server.Serve(httpListener) }()
 	go func() { grpcErr <- grpcServer.Serve(apiListener) }()
 
-	logger.Infof("gua started (river/postgres backend)  grpc=%s  http=%s", grpcListen, httpListen)
+	logger.Info("gua started", "backend", "river/postgres", "grpc", grpcListen, "http", httpListen)
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-sig:
 		logger.Info("receive signal")
 	case err := <-grpcErr:
-		logger.Error(err)
+		logger.Error("server error", "error", err)
 	case err := <-httpErr:
-		logger.Error(err)
+		logger.Error("server error", "error", err)
 	}
 }

@@ -5,19 +5,17 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
+	"log/slog"
 )
 
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-var env *string
 var (
-	version             string
-	compileDate         string
-	name                string
-	listenChannelPrefix string
-	cmdStart            = cli.Command{
+	version     string
+	compileDate string
+	name        string
+	cmdStart    = cli.Command{
 		Name:    "start",
 		Usage:   "start gua server",
 		Aliases: []string{"st"},
@@ -33,25 +31,7 @@ var (
 			},
 		},
 	}
-	logger       *logrus.Logger
-	guaMsgFormat = "\ngua start at \"{{.GetStartTime}}\"\tserver ip:\"{{.ExternalIp}}\"\tversion:\"{{.Version}}\"\tcomplie at \"{{.CompileDate}}\"\n" +
-		"http_listen:\"{{.HttpListen}}\"\n" +
-		"grpc_listen:\"{{.GrpcListen}}\"\n" +
-		"hostname:\"{{.Hostname}}\"\n" +
-		"mac:\"{{.Mac}}\"\n" +
-		"machine_code:\"{{.MachineCode}}\"\n" +
-		"redis_for_group_addr:\"{{.RedisForGroupAddr}}\"\t" + "redis_for_group_dbno:\"{{.RedisForGroupDBNo}}\"\n" +
-		"redis_for_group_max_idle:\"{{.RedisForGroupMaxIdle}}\"\n" +
-		"redis_for_group_max_conn:\"{{.RedisForGroupMaxConn}}\"\n" +
-		"redis_for_api_addr:\"{{.RedisForApiAddr}}\"\t" + "redis_for_api_dbno:\"{{.RedisForApiDBNo}}\"\n" +
-		"redis_for_api_max_idle:\"{{.RedisForApiMaxIdle}}\"\n" +
-		"redis_for_api_max_conn:\"{{.RedisForApiMaxConn}}\"\n" +
-		"redis_for_ready_addr:\"{{.RedisForReadyAddr}}\"\t" + "redis_for_api_dbno:\"{{.RedisForReadyDBNo}}\"\n" +
-		"redis_for_ready_max_idle:\"{{.RedisForReadyMaxIdle}}\"\n" +
-		"redis_for_ready_max_conn:\"{{.RedisForReadyMaxConn}}\"\n" +
-		"redis_for_delay_quene_addr:\"{{.RedisForDelayQueneAddr}}\"\t" + "redis_for_delay_quene_dbno:\"{{.RedisForDelayQueneDBNo}}\"\n" +
-		"redis_for_delay_quene_max_idle:\"{{.RedisForDelayQueneMaxIdle}}\"\n" +
-		"redis_for_delay_quene_max_conn:\"{{.RedisForDelayQueneMaxConn}}\"\n\n"
+	logger *slog.Logger
 )
 
 func main() {

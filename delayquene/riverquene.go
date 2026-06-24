@@ -14,10 +14,10 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivermigrate"
-	"github.com/sirupsen/logrus"
 	"github.com/syhlion/gua/internal/httpclient"
 	guaproto "github.com/syhlion/gua/proto"
 	"google.golang.org/grpc"
+	"log/slog"
 	"resty.dev/v3"
 )
 
@@ -29,7 +29,7 @@ type RiverConfig struct {
 	MachineMac  string
 	MachineIp   string
 	HistoryTTL  int // seconds; 0 disables execution-history recording
-	Logger      *logrus.Logger
+	Logger      *slog.Logger
 }
 
 // guaJobArgs is the River job payload for one gua delivery.
@@ -56,7 +56,7 @@ type guaDeliverWorker struct {
 	machineMac  string
 	machineIp   string
 	historyTTL  int
-	logger      *logrus.Logger
+	logger      *slog.Logger
 	insertNext  func(ctx context.Context, args guaJobArgs, at time.Time) error
 }
 
@@ -102,7 +102,7 @@ func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs])
 	resp, derr := deliver(ctx, w.httpClient, a)
 	w.recordExecution(ctx, a, execTime, resp, derr)
 	if derr != nil {
-		w.logger.WithError(derr).Errorf("river delivery error job %s", a.JobId)
+		w.logger.Error("river delivery error", "job", a.JobId, "error", derr)
 		return derr // River retries per MaxAttempts/backoff
 	}
 	// fire-once: drop the definition after delivery (matches the Redis backend)
@@ -114,14 +114,14 @@ func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs])
 	if w.jobActive(ctx, a.JobId) {
 		sch, err := Parse(a.IntervalPattern)
 		if err != nil {
-			w.logger.WithError(err).Errorf("river cron parse error job %s", a.JobId)
+			w.logger.Error("river cron parse error", "job", a.JobId, "error", err)
 			return nil // delivered ok; just stop recurring on a bad pattern
 		}
 		next := sch.Next(time.Now())
 		na := a
 		na.PlanTime = next.Unix()
 		if err := w.insertNext(ctx, na, next); err != nil {
-			w.logger.WithError(err).Errorf("river reschedule error job %s", a.JobId)
+			w.logger.Error("river reschedule error", "job", a.JobId, "error", err)
 		}
 	}
 	return nil
@@ -189,7 +189,7 @@ func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs) (strin
 type riverQuene struct {
 	pool   *pgxpool.Pool
 	client *river.Client[pgx.Tx]
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewRiver builds a Postgres/River-backed Quene: runs River migrations, creates

@@ -2,23 +2,18 @@ package delayquene
 
 import (
 	"io"
+	"log/slog"
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	guaproto "github.com/syhlion/gua/proto"
 )
 
-func testLogger() *logrus.Logger {
-	l := logrus.New()
+func testLogger() *slog.Logger {
 	if os.Getenv("GUA_TEST_LOG") != "" {
-		l.SetOutput(os.Stderr)
-		l.SetLevel(logrus.DebugLevel)
-		return l
+		return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
-	l.SetOutput(io.Discard)
-	l.SetLevel(logrus.PanicLevel)
-	return l
+	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
 func httpJob(group, id, target, payload, interval string) *guaproto.Job {

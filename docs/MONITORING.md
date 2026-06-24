@@ -65,3 +65,15 @@ RD/ops, not an end-user product.
 Setting `JOB_REPLY_HOOK` makes gua also `POST` a `loghook.Payload` (the same
 execution record) to that URL after each run. Off by default — the history API
 above is the primary path; the webhook is for pushing into an external sink.
+
+## Logging
+
+gua logs via the standard library `log/slog`, configured from the environment
+(see `env.river.example`):
+
+- `LOG_OUTPUT` — `stdout` (default) / `file` / `both`
+- `LOG_FILE` — path when writing to a file (default `gua.log`)
+- `LOG_FORMAT` — `json` (default) / `text`; `LOG_LEVEL` — `debug|info|warn|error`
+- File output is rotated by lumberjack: `LOG_ROTATE_MAX_SIZE_MB` (default 100),
+  `LOG_ROTATE_MAX_BACKUPS` (7), `LOG_ROTATE_MAX_AGE_DAYS` (30),
+  `LOG_ROTATE_COMPRESS` (false).
