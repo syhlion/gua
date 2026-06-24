@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,6 +46,25 @@ func Status(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		restresp.Write(w, s, http.StatusOK)
+	}
+}
+// History returns recent execution records for a group (Monitor Tier 2).
+func History(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		groupName := mux.Vars(r)["group_name"]
+		limit := 100
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				limit = n
+			}
+		}
+		entries, err := quene.History(groupName, limit)
+		if err != nil {
+			logger.Warnf("history error: %v", err)
+			restresp.Write(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		restresp.Write(w, entries, http.StatusOK)
 	}
 }
 func Import(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {

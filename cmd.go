@@ -60,6 +60,13 @@ func cmdInit(c *cli.Context) (conf *Config) {
 		logger.Fatal(err)
 	}
 	conf.JobReplyHook = os.Getenv("JOB_REPLY_HOOK")
+	// 執行歷史保留秒數;預設 5 天,設 0 關閉
+	conf.HistoryTTL = 5 * 24 * 3600
+	if v := os.Getenv("GUA_HISTORY_TTL"); v != "" {
+		if n, perr := strconv.Atoi(v); perr == nil {
+			conf.HistoryTTL = n
+		}
+	}
 	conf.RedisForApiAddr = os.Getenv("REDIS_FOR_API_ADDR")
 	if conf.RedisForApiAddr == "" {
 		logger.Fatal("empty env REDIS_FOR_API_ADDR")
@@ -290,6 +297,7 @@ func start(c *cli.Context) {
 		MachineMac:  conf.Mac,
 		MachineHost: conf.Hostname,
 		JobReplyUrl: conf.JobReplyHook,
+		HistoryTTL:  conf.HistoryTTL,
 		Logger:      logger,
 	}
 	quene, err := delayquene.New(dconf, groupRedis, readyRedis, delayRedis)
@@ -318,6 +326,7 @@ func start(c *cli.Context) {
 	httpApiListener, err := net.Listen("tcp", conf.HttpListen)
 	r := mux.NewRouter()
 	r.HandleFunc("/version", Version(version)).Methods("GET")
+	r.HandleFunc("/ui", UI()).Methods("GET")
 	subRouter := r.PathPrefix("/v1/").Subrouter()
 	subRouter.HandleFunc("/status", httpv1.Status(quene)).Methods("GET")
 	subRouter.HandleFunc("/register/group", httpv1.RegisterGroup(quene)).Methods("POST")
@@ -331,6 +340,7 @@ func start(c *cli.Context) {
 
 	subRouter.HandleFunc("/{group_name}/job/list", httpv1.GetJobList(quene)).Methods("GET")
 	subRouter.HandleFunc("/{group_name}/group/info", httpv1.GroupInfo(quene)).Methods("GET")
+	subRouter.HandleFunc("/{group_name}/history", httpv1.History(quene)).Methods("GET")
 	subRouter.HandleFunc("/{group_name}/dump", httpv1.DumpBy(migrate)).Methods("GET")
 	subRouter.HandleFunc("/{group_name}/job/clear", httpv1.GroupJobClear(quene)).Methods(http.MethodDelete)
 	subRouter.HandleFunc("/{group_name}/job/delete/{job_name}", httpv1.RemoveJobsByJobName(quene)).Methods(http.MethodDelete)

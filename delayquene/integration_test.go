@@ -60,6 +60,7 @@ func newTestQuene(t *testing.T) Quene {
 		MachineHost: "test-host",
 		MachineMac:  "00:00:00:00:00:00",
 		MachineIp:   "127.0.0.1",
+		HistoryTTL:  3600,
 		Logger:      testLogger(),
 	}
 	q, err := New(cfg, testPool(mr.Addr(), 3), testPool(mr.Addr(), 1), testPool(mr.Addr(), 2))
@@ -236,6 +237,51 @@ func TestPauseStopsDelivery(t *testing.T) {
 	// allow at most one in-flight delivery racing the pause
 	if after-before > 1 {
 		t.Fatalf("deliveries continued after pause: before=%d after=%d", before, after)
+	}
+}
+
+// A fired job should leave a queryable execution-history record.
+func TestHistoryRecorded(t *testing.T) {
+	q := newTestQuene(t)
+	if err := q.RegisterGroup("GRP"); err != nil {
+		t.Fatalf("RegisterGroup: %v", err)
+	}
+	got := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case got <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	if err := q.Push(httpJob("GRP", "JOBH", srv.URL, "hist", "@once")); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	select {
+	case <-got:
+	case <-time.After(8 * time.Second):
+		t.Fatal("callback never fired")
+	}
+	// give the deferred history write a moment
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		hist, err := q.History("GRP", 10)
+		if err != nil {
+			t.Fatalf("History: %v", err)
+		}
+		if len(hist) >= 1 {
+			h := hist[0]
+			if h.JobId != "JOBH" || !h.Success || h.Type != "HTTP" {
+				t.Fatalf("unexpected history entry: %+v", h)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("history entry never recorded")
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 

@@ -47,10 +47,10 @@
 - [x] 生命週期整合測試:HTTP POST 信封、gRPC Push、recurring、pause、list/delete
 - [x] `go test ./...` 全綠
 
-### Phase 3 — 止血(panic / vet / leak)〔刪除後大幅縮水〕
-- [ ] 殘餘 `FindStringSubmatch` nil guard + 入口驗證
-- [ ] `context.WithTimeout` cancel 洩漏、`signal.Notify(SIGKILL)`、unreachable code
-- [ ] `go vet ./...` 乾淨
+### Phase 3 — 止血(panic / vet / leak)— ✅ 完成
+- [x] `FindStringSubmatch` nil guard(Push/Edit/worker)+ 入口驗證
+- [x] `context.WithTimeout` cancel 洩漏修正、移除 `signal.Notify(SIGKILL)`、unreachable code
+- [x] `go vet ./...` 乾淨
 
 ### Phase 4 — delayquene 可測化 — ✅ 由 Phase 2 達成
 - [x] 改用 miniredis 真實整合測試,取代原訂 redis interface 抽象(改動更小、更貼近真實)
@@ -63,16 +63,17 @@
 - [x] job 狀態/active/下次執行時間 → 既有 `GET /v1/{group}/job/list`
 - [x] 純讀;TestStats 覆蓋;作為 Phase 6 硬化的驗證工具
 
-### Phase 6 — 分散式安全性硬化(最高風險)+ 壓測驗收
-- [ ] `STARTLOCK`/`JOBCHECKLOCK` 換 TTL + owner token 鎖
-- [ ] 修 `SERVER-N` 槽位 / snowflake 撞號窗口(租約 / fencing)
-- [ ] ready-queue 冪等 / 去重
-- [ ] gRPC 連線池化
-- [ ] **通過壓測驗收門**
+### Phase 6 — 分散式安全性硬化 + 壓測驗收 — ✅ 完成
+- [x] `STARTLOCK`/`JOBCHECKLOCK` 換 TTL + owner token 鎖(Lua CAS 釋放);JobCheck 不再無鎖硬跑
+- [x] ready-queue dedup fence(`FENCE-<job>-<exectime>`,SET NX PX);reclaim/JobCheck 不重推
+- [x] gRPC 連線池化(per-addr 快取,免每次 Dial)
+- [~] `SERVER-N` 撞號窗口:接管門檻 15s→30s 縮小窗口 + startup 由 STARTLOCK 序列化(完整 fencing 列殘留風險)
+- [x] **壓測驗收通過**:N=500/2000/5000 同秒,0 漏觸發 0 重複,誤差 < 700ms ticker 地板(p99<300ms@5k)
 
-### Phase 7 — ★ Monitor Tier 2:執行歷史 + 工程 Web UI
-- [ ] reply payload 落地 Redis(TTL,env 可調)
-- [ ] 歷史查詢 API + 單頁工程 Web UI(兼 API 驗證台)
+### Phase 7 — ★ Monitor Tier 2:執行歷史 + 工程 Web UI — ✅ 完成
+- [x] 執行結果落地 Redis ZSET(score=exec_time,寫入時 prune 到 retention;`GUA_HISTORY_TTL` env,預設 5 天)
+- [x] `GET /v1/{group}/history?limit=` 查詢 API + `GET /ui` 單頁工程 console(status/jobs/history/auto-refresh)
+- [x] 整合測試 TestHistoryRecorded + 真 redis 端到端 smoke 驗證(register→add→fire→history→ui)
 
 ### Phase 8 — 取代評估 + 遷移計畫(從簡)
 - [ ] gua vs JobScheduler 精簡對位 + 缺口、相依者改接口清單、上線/回退

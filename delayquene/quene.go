@@ -210,6 +210,7 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 		bucket:               bucket,
 		jobQuene:             jobQuene,
 		jobReplyUrl:          config.JobReplyUrl,
+		historyTTL:           config.HistoryTTL,
 		machineHost:          config.MachineHost,
 		machineMac:           config.MachineMac,
 		machineIp:            config.MachineIp,
@@ -248,6 +249,7 @@ type Config struct {
 	MachineMac                string
 	MachineIp                 string
 	JobReplyUrl               string
+	HistoryTTL                int // seconds; 0 disables execution-history recording
 	Logger                    *logrus.Logger
 }
 
@@ -267,6 +269,7 @@ type Quene interface {
 	RemoveGroup(groupName string) (err error)
 	ExistsGroup(groupName string) (exists int, err error)
 	Stats() (s *Stats, err error)
+	History(group string, limit int) (entries []*HistoryEntry, err error)
 }
 
 // ServerStat is the health of a single cluster slot (SERVER-N).

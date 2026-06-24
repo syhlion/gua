@@ -28,6 +28,7 @@ type Worker struct {
 	realServerName string
 	urpool         *redis.Pool
 	jobReplyUrl    string
+	historyTTL     int
 	machineHost    string
 	machineMac     string
 	machineIp      string
@@ -135,6 +136,24 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 			}
 
 		}
+
+		// 落地執行歷史(Redis TTL),供 Monitor Tier 2 查詢
+		entry := &HistoryEntry{
+			JobId:           job.Id,
+			GroupName:       job.GroupName,
+			Type:            cmdType,
+			PlanTime:        job.PlanTime,
+			ExecTime:        execTime.Unix(),
+			FinishTime:      finishTime,
+			Success:         err == nil,
+			ExecMachineHost: t.machineHost,
+		}
+		if err != nil {
+			entry.Error = err.Error()
+		} else {
+			entry.Message = resp
+		}
+		t.recordHistory(entry)
 
 	}()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)

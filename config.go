@@ -27,6 +27,7 @@ type Config struct {
 	RedisForGroupMaxIdle      int
 	RedisForGroupMaxConn      int
 	JobReplyHook              string
+	HistoryTTL                int
 	MachineCode               string
 	StartTime                 time.Time
 }
