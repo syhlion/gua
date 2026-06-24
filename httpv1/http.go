@@ -11,16 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
 	"github.com/gorilla/mux"
 	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"
 	"github.com/syhlion/gua/delayquene"
-	"github.com/syhlion/gua/luacore"
 	"github.com/syhlion/gua/migrate"
 	guaproto "github.com/syhlion/gua/proto"
 	"github.com/syhlion/restresp"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -36,74 +33,6 @@ func SetLogger(l *logrus.Logger) {
 func Version(serverVersion string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		restresp.Write(w, serverVersion, http.StatusOK)
-	}
-}
-func AddFunc(quene delayquene.Quene, apiRedis *redis.Pool, lpool *luacore.LStatePool) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			logger.Warnf("Error reading body: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		payload := &AddFuncPayload{}
-		err = json.Unmarshal(body, payload)
-		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		_, err = quene.GroupInfo(payload.GroupName)
-		if err != nil {
-			logger.Warnf("Error get group: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		funcKey := fmt.Sprintf("FUNC-%s-%s", payload.GroupName, payload.Name)
-		c := apiRedis.Get()
-		defer c.Close()
-		var otpToken string
-		if payload.UseOtp {
-			if payload.DisableGroupOtp {
-				kkey, err := totp.Generate(totp.GenerateOpts{
-					Issuer:      payload.GroupName,
-					AccountName: payload.Name,
-				})
-				if err != nil {
-					logger.Warnf("Error set lua: %v", err)
-					restresp.Write(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				otpToken = kkey.Secret()
-			}
-		}
-		f := &guaproto.Func{
-			Name:            payload.Name,
-			GroupName:       payload.GroupName,
-			UseOtp:          payload.UseOtp,
-			DisableGroupOtp: payload.DisableGroupOtp,
-			Memo:            payload.Memo,
-			OtpToken:        otpToken,
-			LuaBody:         []byte(payload.LuaBody),
-		}
-		b, err := proto.Marshal(f)
-		if err != nil {
-			logger.Warnf("Error set lua: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		_, err = c.Do("SET", funcKey, b)
-		if err != nil {
-			logger.Warnf("Error set lua: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if otpToken != "" {
-			restresp.Write(w, otpToken, http.StatusOK)
-		} else {
-			restresp.Write(w, payload.Name, http.StatusOK)
-		}
-
 	}
 }
 func Import(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {

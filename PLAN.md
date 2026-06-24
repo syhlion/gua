@@ -28,9 +28,9 @@
 - [x] Go/No-Go 快評:**GO(條件式)**,前提 = 接受 at-least-once + 消費端冪等
 
 ### Phase 1 — 觸發模型重塑(瘦身 + 雙軌 gRPC)〔先做,刪掉的不該浪費力氣測〕
-- [ ] **1a 移除 REMOTE/LUA**:刪 `node/`、`luacore/`、`luaweb/`、`apifunc.go`、func HTTP server(`LuaEntrance`)
-- [ ] 清依賴:`gopher-lua`、`glua-libs`、`telegram-bot-api`、`go-sql-driver/mysql`(順帶清 dependabot 漏洞)
-- [ ] `ExecuteJob` switch 收斂為 `HTTP` / `GRPC`;`UrlRe` 改 `^(HTTP|GRPC)@`
+- [x] **1a 移除 REMOTE/LUA**:刪 `node/`、`luacore/`、`luaweb/`、`apifunc.go`、func HTTP server(`LuaEntrance`)
+- [x] 清依賴:`gopher-lua`、`glua-libs`、`telegram-bot-api`、`go-sql-driver/mysql`、`bbolt`(順帶清 dependabot 漏洞)
+- [x] `UrlRe` 改 `^(HTTP|GRPC)@`;`ExecuteJob`/`Push`/`Edit` switch 收斂(HTTP 可跑,GRPC 派送留 1b)。build/vet 全綠
 - [ ] **1b 新 proto**:
   - [ ] Admin/CRUD gRPC service(鏡像 HTTP:RegisterGroup / AddJob / Remove / Pause / Active / Edit / List / RegisterCallbackEndpoint)
   - [ ] Trigger gRPC service(gua→消費者 Push:`OnJobTrigger(job_id,name,group,plan_time,exec_time,payload,otp_code)→result`)

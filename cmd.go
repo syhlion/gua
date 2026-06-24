@@ -19,7 +19,6 @@ import (
 	"github.com/syhlion/greq"
 	"github.com/syhlion/gua/delayquene"
 	"github.com/syhlion/gua/httpv1"
-	"github.com/syhlion/gua/luacore"
 	"github.com/syhlion/gua/migrate"
 	guaproto "github.com/syhlion/gua/proto"
 	requestwork "github.com/syhlion/requestwork.v2"
@@ -49,10 +48,6 @@ func cmdInit(c *cli.Context) (conf *Config) {
 	conf.HttpListen = os.Getenv("HTTP_LISTEN")
 	if conf.HttpListen == "" {
 		logger.Fatal("empty env HTTP_LISTEN")
-	}
-	conf.HttpFuncListen = os.Getenv("HTTP_FUNC_LISTEN")
-	if conf.HttpFuncListen == "" {
-		logger.Fatal("empty env HTTP_FUNC_LISTEN")
 	}
 	conf.Hostname, err = GetHostname()
 	if err != nil {
@@ -304,7 +299,6 @@ func start(c *cli.Context) {
 		logger.Fatal(err)
 		return
 	}
-	lpool := luacore.New()
 	//server
 	apiListener, err := net.Listen("tcp", conf.GrpcListen)
 	if err != nil {
@@ -330,7 +324,6 @@ func start(c *cli.Context) {
 
 	reflection.Register(grpc)
 	httpErr := make(chan error)
-	httpFuncErr := make(chan error)
 	grpcErr := make(chan error)
 	httpApiListener, err := net.Listen("tcp", conf.HttpListen)
 	r := mux.NewRouter()
@@ -339,7 +332,6 @@ func start(c *cli.Context) {
 	subRouter.HandleFunc("/register/group", httpv1.RegisterGroup(quene)).Methods("POST")
 	subRouter.HandleFunc("/remove/group", httpv1.RemoveGroup(quene)).Methods("POST")
 	subRouter.HandleFunc("/add/job", httpv1.AddJob(quene)).Methods("POST")
-	subRouter.HandleFunc("/add/func", httpv1.AddFunc(quene, apiRedis, lpool)).Methods("POST")
 	subRouter.HandleFunc("/delete/job", httpv1.RemoveJob(quene)).Methods("POST")
 	subRouter.HandleFunc("/pause/job", httpv1.PauseJob(quene)).Methods("POST")
 	subRouter.HandleFunc("/active/job", httpv1.ActiveJob(quene)).Methods("POST")
@@ -361,17 +353,6 @@ func start(c *cli.Context) {
 	}
 	go func() {
 		httpErr <- server.Serve(httpApiListener)
-	}()
-
-	httpFuncListener, err := net.Listen("tcp", conf.HttpFuncListen)
-	rFunc := mux.NewRouter()
-	rFunc.HandleFunc("/{group_name}/{func_name}", LuaEntrance(quene, apiRedis, lpool))
-	serverFunc := http.Server{
-		ReadTimeout: 3 * time.Second,
-		Handler:     handlers.CORS()(rFunc),
-	}
-	go func() {
-		httpFuncErr <- serverFunc.Serve(httpFuncListener)
 	}()
 
 	go func() {
@@ -427,8 +408,6 @@ func start(c *cli.Context) {
 	case <-shutdow_observer:
 		logger.Info("receive signal")
 	case err := <-grpcErr:
-		logger.Error(err)
-	case err := <-httpFuncErr:
 		logger.Error(err)
 	case err := <-httpErr:
 		logger.Error(err)

@@ -22,15 +22,6 @@ type RegisterGroupPayload struct {
 	GroupName string `json:"group_name"`
 }
 
-type AddFuncPayload struct {
-	GroupName       string `json:"group_name"`
-	Name            string `json:"name"`
-	UseOtp          bool   `json:"use_otp"`
-	DisableGroupOtp bool   `json:"disable_group_otp"`
-	LuaBody         string `json:"lua_body"`
-	Memo            string `sjon:"memo"`
-}
-
 type JobControlPayload struct {
 	GroupName string `json:"group_name"`
 	JobId     string `json:"job_id"`

@@ -2,13 +2,10 @@ package delayquene
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,10 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/syhlion/greq"
 	"github.com/syhlion/gua/loghook"
-	"github.com/syhlion/gua/luacore"
 	guaproto "github.com/syhlion/gua/proto"
-	lua "github.com/yuin/gopher-lua"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -36,7 +30,6 @@ type Worker struct {
 	machineMac     string
 	machineIp      string
 	httpClient     *greq.Client
-	lpool          *luacore.LStatePool
 	bucketName     string
 	once1          *sync.Once
 	once2          *sync.Once
@@ -149,103 +142,9 @@ func (t *Worker) ExecuteJob(job *guaproto.ReadyJob) (err error) {
 			t.logger.WithError(err).Errorf("http get error. job:%#v", job)
 			return err
 		}
-	case "REMOTE":
-		nodeIdString := ss[2]
-		cc := t.urpool.Get()
-		defer cc.Close()
-		nodeIds := strings.Split(nodeIdString, ",")
-		errTexts := make([]string, 0)
-		for _, nodeId := range nodeIds {
-			func() {
-				remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", job.GroupName, nodeId)
-				b, err := redis.Bytes(cc.Do("GET", remoteKey))
-				if err != nil {
-
-					t.logger.WithError(err).Errorf("remote nodeinfo get error. remotekey:%s. job:%#v", remoteKey, job)
-					text := fmt.Sprintf("remote nodeinfo get error. remotekey:%s. job:%#v. err:%#v", remoteKey, job, err)
-					errTexts = append(errTexts, text)
-					return
-				}
-				nr := guaproto.NodeRegisterRequest{}
-				err = proto.Unmarshal(b, &nr)
-				if err != nil {
-					t.logger.WithError(err).Errorf("nodeinfo unmarshal error. remotekey:%s. job:%#v", remoteKey, job)
-					text := fmt.Sprintf("nodeinfo unmarshal error. remotekey:%s. job:%#v. err:%#v", remoteKey, job, err)
-					errTexts = append(errTexts, text)
-					return
-				}
-				var addr string
-				if nr.BoradcastAddr != "" {
-					addr = nr.BoradcastAddr
-				} else {
-					ss := strings.Split(nr.Grpclisten, ":")
-					addr = nr.Ip + ":" + ss[1]
-
-				}
-				conn, err := grpc.Dial(addr, grpc.WithInsecure())
-				if err != nil {
-					t.logger.WithError(err).Errorf("nodeinfo connect error. remotekey:%s. job:%#v", remoteKey, job)
-					text := fmt.Sprintf("nodeinfo connect error. remotekey:%s. job:%#v. err:%#v", remoteKey, job, err)
-					errTexts = append(errTexts, text)
-					return
-				}
-				defer conn.Close()
-
-				passcode, _ := totp.GenerateCode(job.OtpToken, time.Now())
-				nodeClient := guaproto.NewGuaNodeClient(conn)
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				cmdReq := &guaproto.RemoteCommandRequest{
-					ExecCmd: job.ExecCmd,
-					JobId:   job.Id,
-					Timeout: job.Timeout,
-					OtpCode: passcode,
-				}
-				_, err = nodeClient.RemoteCommand(ctx, cmdReq)
-				if err != nil {
-					t.logger.WithError(err).Errorf("nodeinfo exec error. remotekey:%s. job:%#v", remoteKey, job)
-					text := fmt.Sprintf("nodeinfo exec error. remotekey:%s. job:%#v. err:%#v", remoteKey, job, err)
-					errTexts = append(errTexts, text)
-					return
-				}
-			}()
-		}
-		if len(errTexts) != 0 {
-			err = errors.New(strings.Join(errTexts, ".\n"))
-			return
-
-		}
-
-	case "LUA":
-
-		l := t.lpool.Get()
-		ctx, _ := context.WithTimeout(context.Background(), 60*time.Second)
-		l.SetContext(ctx)
-		err := l.DoString(string(job.ExecCmd))
-		if err != nil {
-			t.lpool.Put(l)
-			t.logger.WithError(err).Errorf("lua compile error.  job:%#v", job)
-			return err
-		}
-		lfunc := l.GetGlobal(job.Name)
-		switch r := lfunc.(type) {
-		case *lua.LFunction:
-			err := l.CallByParam(lua.P{
-				Fn:      r,
-				NRet:    1,
-				Protect: true,
-			}, lua.LString(job.Id), lua.LString(job.GroupName), lua.LNumber(job.PlanTime), lua.LNumber(execTime.Unix()))
-
-			t.lpool.Put(l)
-			if err != nil {
-				t.logger.WithError(err).Errorf("lua exec error.  job:%#v", job)
-				return err
-			}
-		default:
-			t.lpool.Put(l)
-			t.logger.Errorf("lua no func. job:%#v", job)
-			return errors.New("lua no fuc")
-		}
+	default:
+		t.logger.Errorf("unsupported request type %q. job:%#v", cmdType, job)
+		return fmt.Errorf("unsupported request type %q", cmdType)
 	}
 	finishTime = time.Now().Unix()
 	return
@@ -371,7 +270,6 @@ func (t *Worker) RunJobCheck() {
 
 			}
 		}
-		t.logger.Error("RunJobCheck error")
 	})
 }
 func (t *Worker) RunForDelayQuene() {

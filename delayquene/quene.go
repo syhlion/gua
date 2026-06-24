@@ -1,28 +1,22 @@
 package delayquene
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	fmt "fmt"
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/yuin/gopher-lua/parse"
 
 	"github.com/bwmarrin/snowflake"
 	"github.com/gomodule/redigo/redis"
 	"github.com/pquerna/otp/totp"
 	"github.com/syhlion/greq"
-	"github.com/syhlion/gua/luacore"
 	guaproto "github.com/syhlion/gua/proto"
 	requestwork "github.com/syhlion/requestwork.v2"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -37,7 +31,7 @@ var re = regexp.MustCompile(`^SERVER-(\d+)$`)
 
 // var jobCheckRe = regexp.MustCompile(`^JOB-([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)-scan$`)
 var jobRe = regexp.MustCompile(`^JOB-([a-zA-Z0-9_]+)-([a-zA-Z0-9_]+)$`)
-var UrlRe = regexp.MustCompile(`^(HTTP|REMOTE|LUA)\@(.+)?`)
+var UrlRe = regexp.MustCompile(`^(HTTP|GRPC)\@(.+)?`)
 
 type servers []string
 
@@ -133,9 +127,6 @@ func initName(pool *redis.Pool) (serverNum int, s string, err error) {
 }
 
 func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRedis *redis.Pool) (quene Quene, err error) {
-
-	// init lua pool
-	lpool := luacore.New()
 
 	num, name, err := initName(delayRedis)
 	if err != nil {
@@ -234,7 +225,6 @@ func New(config *Config, groupRedis *redis.Pool, readyRedis *redis.Pool, delayRe
 		node:           node,
 		num:            num,
 		config:         config,
-		lpool:          lpool,
 		bucket:         bucket,
 		jobQuene:       jobQuene,
 		qpool:          delayRedis,
@@ -289,7 +279,6 @@ type q struct {
 	rpool          *redis.Pool
 	qpool          *redis.Pool
 	urpool         *redis.Pool
-	lpool          *luacore.LStatePool
 	//httpClient     *greq.Client
 }
 
@@ -395,70 +384,14 @@ func (t *q) Edit(groupName, Id, requestUrl, execCmd string) (err error) {
 	}
 	job.RequestUrl = requestUrl
 	job.ExecCmd = []byte(execCmd)
-	cc := t.urpool.Get()
-	defer cc.Close()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
+	if len(ss) == 0 {
+		return errors.New("type error")
+	}
 	cmdType := ss[1]
 	switch cmdType {
 	case "HTTP":
-	case "REMOTE":
-		err = func() (err error) {
-			nodeIdString := ss[2]
-			nodeIds := strings.Split(nodeIdString, ",")
-			for _, nodeId := range nodeIds {
-
-				remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", job.GroupName, nodeId)
-				b, err := redis.Bytes(cc.Do("GET", remoteKey))
-				if err != nil {
-					t.config.Logger.Warnf("NO REMOTE NODE:%s\n", err)
-					return errors.New("NO REMOTE NODE")
-				}
-
-				nodeInfo := guaproto.NodeRegisterRequest{}
-				err = proto.Unmarshal(b, &nodeInfo)
-				if err != nil {
-					return err
-				}
-				var addr string
-				if nodeInfo.BoradcastAddr != "" {
-					addr = nodeInfo.BoradcastAddr
-				} else {
-					ss := strings.Split(nodeInfo.Grpclisten, ":")
-					addr = nodeInfo.Ip + ":" + ss[1]
-
-				}
-				fmt.Println(nodeInfo)
-				conn, err := grpc.Dial(addr, grpc.WithInsecure())
-				if err != nil {
-					return err
-				}
-				defer conn.Close()
-				passcode, _ := totp.GenerateCode(nodeInfo.OtpToken, time.Now())
-				nodeClient := guaproto.NewGuaNodeClient(conn)
-				ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-
-				cmdReq := &guaproto.RegisterCommandRequest{
-					JobId:    job.Id,
-					OtpToken: job.OtpToken,
-					OtpCode:  passcode,
-				}
-				_, err = nodeClient.RegisterCommand(ctx, cmdReq)
-				if err != nil {
-					return err
-				}
-			}
-			return
-		}()
-		if err != nil {
-			return
-		}
-	case "LUA":
-		reader := bytes.NewReader(job.ExecCmd)
-		_, err = parse.Parse(reader, "<string>")
-		if err != nil {
-			return
-		}
-
+	case "GRPC":
 	default:
 		err = errors.New("type error")
 		return
@@ -573,70 +506,14 @@ func (t *q) Heartbeat(nodeId string, groupName string) (err error) {
 }
 func (t *q) Push(job *guaproto.Job) (err error) {
 
-	cc := t.urpool.Get()
-	defer cc.Close()
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
+	if len(ss) == 0 {
+		return errors.New("type error")
+	}
 	cmdType := ss[1]
 	switch cmdType {
 	case "HTTP":
-	case "REMOTE":
-		err = func() (err error) {
-			nodeIdString := ss[2]
-			nodeIds := strings.Split(nodeIdString, ",")
-			for _, nodeId := range nodeIds {
-
-				remoteKey := fmt.Sprintf("REMOTE_NODE_%s_%s", job.GroupName, nodeId)
-				b, err := redis.Bytes(cc.Do("GET", remoteKey))
-				if err != nil {
-					t.config.Logger.Warnf("NO REMOTE NODE:%s\n", err)
-					return errors.New("NO REMOTE NODE")
-				}
-
-				nodeInfo := guaproto.NodeRegisterRequest{}
-				err = proto.Unmarshal(b, &nodeInfo)
-				if err != nil {
-					return err
-				}
-				var addr string
-				if nodeInfo.BoradcastAddr != "" {
-					addr = nodeInfo.BoradcastAddr
-				} else {
-					ss := strings.Split(nodeInfo.Grpclisten, ":")
-					addr = nodeInfo.Ip + ":" + ss[1]
-
-				}
-				fmt.Println(nodeInfo)
-				conn, err := grpc.Dial(addr, grpc.WithInsecure())
-				if err != nil {
-					return err
-				}
-				defer conn.Close()
-				passcode, _ := totp.GenerateCode(nodeInfo.OtpToken, time.Now())
-				nodeClient := guaproto.NewGuaNodeClient(conn)
-				ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-
-				cmdReq := &guaproto.RegisterCommandRequest{
-					JobId:    job.Id,
-					OtpToken: job.OtpToken,
-					OtpCode:  passcode,
-				}
-				_, err = nodeClient.RegisterCommand(ctx, cmdReq)
-				if err != nil {
-					return err
-				}
-			}
-			return
-		}()
-		if err != nil {
-			return
-		}
-	case "LUA":
-		reader := bytes.NewReader(job.ExecCmd)
-		_, err = parse.Parse(reader, "<string>")
-		if err != nil {
-			return
-		}
-
+	case "GRPC":
 	default:
 		err = errors.New("type error")
 		return

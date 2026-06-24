@@ -10,7 +10,6 @@ type Config struct {
 	ExternalIp                string
 	GrpcListen                string
 	HttpListen                string
-	HttpFuncListen            string
 	RedisForApiAddr           string
 	RedisForApiDBNo           int
 	RedisForApiMaxIdle        int
