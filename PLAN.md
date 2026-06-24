@@ -39,7 +39,7 @@
 - [x] **1b 拔認證**:移除 TOTP/OTP 全鏈路 + `pquerna/otp` 依賴;group 純命名空間
 - [x] **1b HTTP callback 改 POST JSON 信封**(`TriggerEnvelope`,與 gRPC 同欄位)+ worker GRPC 派送(dial→`OnJobTrigger`)
 - [x] **1c** Job model:`exec_cmd` bytes → `payload` string;`request_url` 內部仍存 `TYPE@target`,API 用 `delivery`+`target`;清掉 dead root migrate.go/group.go/spec.go
-- [ ] **1b 尾巴**(留待):`benchmark/` 仍是 LUA 樣板(Phase 6 改寫);docs(README/apiv1.md/luamode.md/funclua.md)待重寫
+- [x] **1b 尾巴**:`benchmark/` 刪除(由 stress_test.go 取代);docs 已於 Phase 8 重寫/清理
 
 ### Phase 2 — 測試骨架(地基)— ✅ 完成
 - [x] miniredis 整合測試骨架(`newTestQuene`,真 TCP redis,免抽象 interface)
@@ -75,8 +75,10 @@
 - [x] `GET /v1/{group}/history?limit=` 查詢 API + `GET /ui` 單頁工程 console(status/jobs/history/auto-refresh)
 - [x] 整合測試 TestHistoryRecorded + 真 redis 端到端 smoke 驗證(register→add→fire→history→ui)
 
-### Phase 8 — 取代評估 + 遷移計畫(從簡)
-- [ ] gua vs JobScheduler 精簡對位 + 缺口、相依者改接口清單、上線/回退
+### Phase 8 — 取代評估 + 遷移計畫(從簡)— ✅ 完成
+- [x] `EVAL.md`:功能對位、消費者破壞性變更清單、at-least-once/timing、殘留風險、上線/回退
+- [x] 文件刷新:README/apiv1.md 改為新模型;刪 luamode.md/funclua.md/benchmark(過時)
+- [x] 記錄殘留:SERVER-N 完整 fencing、greq→resty 替換(獨立任務)
 
 ---
 
