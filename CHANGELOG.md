@@ -1,5 +1,69 @@
 [unrelease]
 
+[v3.0.0] — Postgres / River (breaking)
+
+[Changed]
+
+* backing store moved from Redis to **PostgreSQL** via River
+  (`github.com/riverqueue/river`). gua is now a stateless horizontal scaler:
+  every node dequeues with `FOR UPDATE SKIP LOCKED`.
+* deleted the entire hand-rolled reliability layer that worked around Redis —
+  per-node buckets, ready queue, distributed locks, de-dup fence, JOB-*-scan /
+  JobCheck, down-server reclaim, and SERVER-N slot election + owner-token
+  fencing. Postgres row locks + River (retry, periodic, rescuer, leader
+  election) provide these.
+* env: 4 Redis groups collapsed to one `PG_DSN`. `BACKEND` toggle removed.
+
+[Added]
+
+* `gua_jobs` (definitions), `gua_groups`, `gua_executions` (history) tables;
+  `History` reads `gua_executions`; `Stats.ready_queue_depth` = pending River
+  occurrences (no slots).
+* retry/backoff on failed delivery (new — was fire-once before); River rescuer
+  re-runs jobs from crashed workers.
+* logging migrated logrus → `log/slog` with env output (stdout/file/both),
+  format/level, and lumberjack file rotation.
+* River stress/timing test; docs + diagrams redrawn for Postgres.
+
+[Notes]
+
+* delivery is at-least-once (retry/rescue) — consumers must be idempotent.
+* future-scheduled jobs have a few seconds of River scheduler latency (vs the
+  old 700ms ticker) — the trade-off for durability.
+
+[v2.0.0] — harden (breaking)
+
+[Changed]
+
+* delivery reduced to two transports: HTTP and gRPC. Removed REMOTE (remote-shell
+  / gua-node) and LUA (in-process script) trigger types.
+* HTTP callback is now a JSON POST envelope (was a GET ping); same fields as the
+  gRPC trigger. `exec_command` -> `payload` (string).
+* new gRPC services: `GuaAdmin` (CRUD, mirrors the REST API) and `GuaCallback`
+  (`OnJobTrigger`, Push). Removed old node/JobReply RPCs.
+* removed app-level OTP auth; group is now a pure namespace. Use transport-level
+  auth (mTLS / gateway) if needed.
+* HTTP client swapped greq/requestwork (archived) -> resty.
+
+[Added]
+
+* monitoring: `GET /v1/status`, `GET /v1/{group}/history`, web console `GET /ui`.
+* execution history persisted to Redis with TTL retention (`GUA_HISTORY_TTL`).
+* test suite: cron parser units + miniredis lifecycle integration + lock/fencing
+  + stress/timing harness.
+* docs refresh: ARCHITECTURE.md, MONITORING.md, EVAL.md, new drawio diagrams.
+
+[Fixed / hardened]
+
+* `STARTLOCK`/`JOBCHECKLOCK` are TTL + owner-token locks (Lua CAS release) — no
+  more deadlock on holder crash; JobCheck no longer runs unlocked.
+* per-firing de-dup fence on the ready queue (reclaim / JobCheck can't
+  double-enqueue).
+* SERVER-N slot fencing (owner token + heartbeat CAS) closes the snowflake
+  node-id collision window; gRPC delivery connection pooling.
+* removed panics (nil request_url), context leaks, the uncatchable SIGKILL
+  handler, and the heavy lua/mysql/telegram dependency tree.
+
 [v1.4.1]
 
 * remove keys use and use scan iter

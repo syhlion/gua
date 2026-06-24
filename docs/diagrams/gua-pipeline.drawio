@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram name="gua-pipeline">
+    <mxGraphModel dx="800" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="860" pageHeight="960" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="gua job pipeline on Postgres/River (one job firing)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="600" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="add" value="AddJob  (HTTP REST / gRPC GuaAdmin)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="280" y="60" width="300" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="store" value="INSERT gua_jobs  (definition, source of truth)&#xa;river.Insert(ScheduledAt = run_at)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="280" y="160" width="300" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="dequeue" value="River worker ×MaxWorkers&#xa;SELECT … FOR UPDATE SKIP LOCKED&#xa;(due rows; LISTEN/NOTIFY wakeup)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="280" y="280" width="300" height="74" as="geometry" />
+        </mxCell>
+        <mxCell id="active" value="job still active ?&#xa;(re-check gua_jobs)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="320" y="400" width="220" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="exec" value="ExecuteJob  →  deliver envelope&#xa;HTTP POST  /  gRPC OnJobTrigger" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="540" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="hist" value="INSERT gua_executions  (every attempt)&#xa;success/fail · timings · prune to TTL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="280" y="650" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="result" value="result" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="330" y="760" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="add" target="store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="store" target="dequeue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="dequeue" target="active">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=10;" edge="1" parent="1" source="active" target="exec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_no" value="paused/deleted&#xa;→ skip" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;dashed=1;" edge="1" parent="1" source="active" target="dequeue">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="180" y="445" /><mxPoint x="180" y="317" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="exec" target="hist">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="hist" target="result">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ok" value="@once → DONE&#xa;recurring → re-Insert(Next)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;fontSize=10;strokeColor=#82b366;fontColor=#5a8a3c;dashed=1;" edge="1" parent="1" source="result" target="store">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="720" y="800" /><mxPoint x="720" y="192" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_fail" value="error → River retry/backoff" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;entryX=0;entryY=0.5;fontSize=10;strokeColor=#b85450;fontColor=#b85450;dashed=1;" edge="1" parent="1" source="result" target="dequeue">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="140" y="800" /><mxPoint x="140" y="317" /></Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

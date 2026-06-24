@@ -1,35 +1,28 @@
 package httpv1
 
 import (
-	"bufio"
 	"encoding/json"
-	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
-	"time"
 
-	"github.com/gomodule/redigo/redis"
+	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/pquerna/otp/totp"
-	"github.com/sirupsen/logrus"
 	"github.com/syhlion/gua/delayquene"
-	"github.com/syhlion/gua/luacore"
-	"github.com/syhlion/gua/migrate"
 	guaproto "github.com/syhlion/gua/proto"
 	"github.com/syhlion/restresp"
-	"google.golang.org/protobuf/proto"
+	"log/slog"
 )
 
 var (
-	logger  *logrus.Logger
+	logger  *slog.Logger
 	jobRe   = regexp.MustCompile(`^([a-zA-Z0-9_]+)$`)
 	groupRe = regexp.MustCompile(`^([a-zA-Z0-9_]+)$`)
 )
 
-func SetLogger(l *logrus.Logger) {
+func SetLogger(l *slog.Logger) {
 	logger = l
 }
 
@@ -38,147 +31,40 @@ func Version(serverVersion string) func(w http.ResponseWriter, r *http.Request) 
 		restresp.Write(w, serverVersion, http.StatusOK)
 	}
 }
-func AddFunc(quene delayquene.Quene, apiRedis *redis.Pool, lpool *luacore.LStatePool) func(w http.ResponseWriter, r *http.Request) {
+
+// Status is a read-only monitoring endpoint: ready-queue depth, orphaned
+// bucket backlog, and per-slot cluster health.
+func Status(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := ioutil.ReadAll(r.Body)
+		s, err := quene.Stats()
 		if err != nil {
-			logger.Warnf("Error reading body: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			logger.Warn(fmt.Sprintf("status error: %v", err))
+			restresp.Write(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		payload := &AddFuncPayload{}
-		err = json.Unmarshal(body, payload)
-		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		_, err = quene.GroupInfo(payload.GroupName)
-		if err != nil {
-			logger.Warnf("Error get group: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		funcKey := fmt.Sprintf("FUNC-%s-%s", payload.GroupName, payload.Name)
-		c := apiRedis.Get()
-		defer c.Close()
-		var otpToken string
-		if payload.UseOtp {
-			if payload.DisableGroupOtp {
-				kkey, err := totp.Generate(totp.GenerateOpts{
-					Issuer:      payload.GroupName,
-					AccountName: payload.Name,
-				})
-				if err != nil {
-					logger.Warnf("Error set lua: %v", err)
-					restresp.Write(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				otpToken = kkey.Secret()
+		restresp.Write(w, s, http.StatusOK)
+	}
+}
+
+// History returns recent execution records for a group (Monitor Tier 2).
+func History(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		groupName := mux.Vars(r)["group_name"]
+		limit := 100
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				limit = n
 			}
 		}
-		f := &guaproto.Func{
-			Name:            payload.Name,
-			GroupName:       payload.GroupName,
-			UseOtp:          payload.UseOtp,
-			DisableGroupOtp: payload.DisableGroupOtp,
-			Memo:            payload.Memo,
-			OtpToken:        otpToken,
-			LuaBody:         []byte(payload.LuaBody),
-		}
-		b, err := proto.Marshal(f)
+		entries, err := quene.History(groupName, limit)
 		if err != nil {
-			logger.Warnf("Error set lua: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			logger.Warn(fmt.Sprintf("history error: %v", err))
+			restresp.Write(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		_, err = c.Do("SET", funcKey, b)
-		if err != nil {
-			logger.Warnf("Error set lua: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if otpToken != "" {
-			restresp.Write(w, otpToken, http.StatusOK)
-		} else {
-			restresp.Write(w, payload.Name, http.StatusOK)
-		}
-
+		restresp.Write(w, entries, http.StatusOK)
 	}
 }
-func Import(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			return
-		}
-		err = m.Import(b)
-		if err != nil {
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		restresp.Write(w, "success", http.StatusOK)
-
-		return
-
-	}
-}
-func DumpBy(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		groupName := vars["group_name"]
-		buff, err := m.Dump(groupName)
-		if err != nil {
-			logger.Errorf("Dump error: %#v", err)
-			return
-		}
-		tf := time.Now().Format("2006-01-02-150405")
-		fileName := fmt.Sprintf("%s-%s-backup.tar.gz", tf, groupName)
-		w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
-		w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
-		b := bufio.NewReader(buff)
-		io.Copy(w, b)
-		return
-
-	}
-}
-func DumpAll(m *migrate.Migrate) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		buff, err := m.Dump("*")
-		if err != nil {
-			logger.Errorf("Dump error: %#v", err)
-			return
-		}
-		tf := time.Now().Format("2006-01-02-150405")
-		fileName := fmt.Sprintf("%s-backup.tar.gz", tf)
-		w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
-		w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
-		b := bufio.NewReader(buff)
-		io.Copy(w, b)
-		return
-
-	}
-}
-func GetNodeList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		groupName := vars["group_name"]
-		nodes, err := quene.QueryNodes(groupName)
-		if err != nil {
-			logger.Warnf("get node list error: %v", err)
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		restresp.Write(w, nodes, http.StatusOK)
-		return
-
-	}
-}
-
 func GroupInfo(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +72,7 @@ func GroupInfo(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reque
 		groupName := vars["group_name"]
 		group, err := quene.GroupInfo(groupName)
 		if err != nil {
-			logger.Warnf("group info error: %v", err)
+			logger.Warn(fmt.Sprintf("group info error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -200,7 +86,7 @@ func GetGroupList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Re
 	return func(w http.ResponseWriter, r *http.Request) {
 		groups, err := quene.QueryGroups()
 		if err != nil {
-			logger.Warnf("get group list error: %v", err)
+			logger.Warn(fmt.Sprintf("get group list error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -222,7 +108,7 @@ func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Requ
 		groupName := vars["group_name"]
 		jobs, err := quene.List(groupName)
 		if err != nil {
-			logger.Warnf("jobs error: %v", err)
+			logger.Warn(fmt.Sprintf("jobs error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -231,11 +117,10 @@ func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Requ
 			job := &ResponseJobList{
 				Name:            v.Name,
 				Id:              v.Id,
-				OtpToken:        v.OtpToken,
 				Exectime:        v.Exectime,
 				IntervalPattern: v.IntervalPattern,
 				RequestUrl:      v.RequestUrl,
-				ExecCmd:         string(v.ExecCmd),
+				Payload:         v.Payload,
 				GroupName:       v.GroupName,
 				Active:          v.Active,
 				Memo:            v.Memo,
@@ -251,14 +136,14 @@ func RegisterGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			logger.Warnf("Error reading body: %v", err)
+			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload := &RegisterGroupPayload{}
 		err = json.Unmarshal(body, payload)
 		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
+			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -270,13 +155,13 @@ func RegisterGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 			restresp.Write(w, "groupname too long", http.StatusBadRequest)
 			return
 		}
-		otp, err := quene.RegisterGroup(payload.GroupName)
+		err = quene.RegisterGroup(payload.GroupName)
 		if err != nil {
-			logger.Warnf("RegisterGroup Error: %v", err)
+			logger.Warn(fmt.Sprintf("RegisterGroup Error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		restresp.Write(w, otp, http.StatusOK)
+		restresp.Write(w, payload.GroupName, http.StatusOK)
 
 	}
 }
@@ -285,7 +170,7 @@ func EditJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			logger.Warnf("Error reading body: %v", err)
+			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -293,7 +178,7 @@ func EditJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request
 		payload := &EditJobPayload{}
 		err = json.Unmarshal(body, payload)
 		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
+			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -309,11 +194,7 @@ func EditJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request
 			restresp.Write(w, "payload no request_url", http.StatusBadRequest)
 			return
 		}
-		if payload.ExecCmd == "" {
-			restresp.Write(w, "payload no ExecCmd", http.StatusBadRequest)
-			return
-		}
-		err = quene.Edit(payload.GroupName, payload.Id, payload.RequestUrl, payload.ExecCmd)
+		err = quene.Edit(payload.GroupName, payload.Id, payload.RequestUrl, payload.Payload)
 		if err != nil {
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
@@ -329,7 +210,7 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			logger.Warnf("Error reading body: %v", err)
+			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -338,7 +219,7 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 		err = json.Unmarshal(body, payload)
 		var jobId string
 		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
+			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -392,27 +273,16 @@ func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request)
 			Timeout:         payload.Timeout,
 			IntervalPattern: payload.IntervalPattern,
 			RequestUrl:      payload.RequestUrl,
-			ExecCmd:         []byte(payload.ExecCommand),
+			Payload:         payload.Payload,
 			Active:          true,
 			Memo:            payload.Memo,
-		}
-		if !payload.UseGroupOtp {
-			kkey, err := totp.Generate(totp.GenerateOpts{
-				Issuer:      job.Id,
-				AccountName: payload.GroupName,
-			})
-			if err != nil {
-				restresp.Write(w, "otp generate error", http.StatusBadRequest)
-				return
-			}
-			job.OtpToken = kkey.Secret()
 		}
 		err = quene.Push(job)
 		if err != nil {
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		logger.Infof("success add job: %v, origin payload: %v", job, payload)
+		logger.Info(fmt.Sprintf("success add job: %v, origin payload: %v", job, payload))
 
 		//nodeId := strconv.FormatInt(node.id, 10)
 		restresp.Write(w, job.Id, http.StatusOK)
@@ -424,24 +294,24 @@ func RemoveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reque
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			logger.Warnf("Error reading body: %v", err)
+			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload := &JobControlPayload{}
 		json.Unmarshal(body, payload)
 		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
+			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		err = quene.Delete(payload.GroupName, payload.JobId)
 		if err != nil {
-			logger.Warnf("jobs error: %v", err)
+			logger.Warn(fmt.Sprintf("jobs error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		logger.Infof("success remove job: %v", payload)
+		logger.Info(fmt.Sprintf("success remove job: %v", payload))
 		restresp.Write(w, "ok", http.StatusOK)
 		return
 
@@ -452,24 +322,24 @@ func PauseJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reques
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			logger.Warnf("Error reading body: %v", err)
+			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload := &JobControlPayload{}
 		json.Unmarshal(body, payload)
 		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
+			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		err = quene.Pause(payload.GroupName, payload.JobId)
 		if err != nil {
-			logger.Warnf("jobs error: %v", err)
+			logger.Warn(fmt.Sprintf("jobs error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		logger.Infof("success pause job: %v", payload)
+		logger.Info(fmt.Sprintf("success pause job: %v", payload))
 		restresp.Write(w, "ok", http.StatusOK)
 		return
 
@@ -480,24 +350,24 @@ func ActiveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Reque
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			logger.Warnf("Error reading body: %v", err)
+			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload := &ActiveJobPayload{}
 		err = json.Unmarshal(body, payload)
 		if err != nil {
-			logger.Warnf("Error json umnarsal: %v", err)
+			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		err = quene.Active(payload.GroupName, payload.JobId, payload.Exectime)
 		if err != nil {
-			logger.Warnf("jobs error: %v", err)
+			logger.Warn(fmt.Sprintf("jobs error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		logger.Infof("success active job: %v", payload)
+		logger.Info(fmt.Sprintf("success active job: %v", payload))
 		restresp.Write(w, "ok", http.StatusOK)
 		return
 
@@ -510,7 +380,7 @@ func GroupJobClear(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 		groupName := vars["group_name"]
 		jobs, err := quene.List(groupName)
 		if err != nil {
-			logger.Warnf("list jobs error: %v", err)
+			logger.Warn(fmt.Sprintf("list jobs error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -518,7 +388,7 @@ func GroupJobClear(quene delayquene.Quene) func(w http.ResponseWriter, r *http.R
 		for _, v := range jobs {
 			err = quene.Delete(groupName, v.Id)
 			if err != nil {
-				logger.Warnf("delete jobs error: %v", err)
+				logger.Warn(fmt.Sprintf("delete jobs error: %v", err))
 				restresp.Write(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -536,7 +406,7 @@ func RemoveJobsByJobName(quene delayquene.Quene) func(w http.ResponseWriter, r *
 		removeJobName := vars["job_name"]
 		allJobs, err := quene.List(groupName)
 		if err != nil {
-			logger.Warnf("RemoveJobsByJobName - list jobs error: %v", err)
+			logger.Warn(fmt.Sprintf("RemoveJobsByJobName - list jobs error: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -545,7 +415,7 @@ func RemoveJobsByJobName(quene delayquene.Quene) func(w http.ResponseWriter, r *
 			if removeJobName == v.Name {
 				err = quene.Delete(groupName, v.Id)
 				if err != nil {
-					logger.Warnf("RemoveJobsByJobName delete job error: %v", err)
+					logger.Warn(fmt.Sprintf("RemoveJobsByJobName delete job error: %v", err))
 					restresp.Write(w, err.Error(), http.StatusBadRequest)
 					return
 				}
@@ -564,20 +434,20 @@ func RemoveGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Req
 
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			logger.Warnf("RemoveGroup Error reading body: %v", err)
+			logger.Warn(fmt.Sprintf("RemoveGroup Error reading body: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload := &RegisterGroupPayload{}
 		err = json.Unmarshal(body, payload)
 		if err != nil {
-			logger.Warnf("RemoveGroup Error json umnarsal: %v", err)
+			logger.Warn(fmt.Sprintf("RemoveGroup Error json umnarsal: %v", err))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		removeGroupErr := quene.RemoveGroup(payload.GroupName)
 		if removeGroupErr != nil {
-			logger.Warnf("RemoveGroup Error: %v", removeGroupErr)
+			logger.Warn(fmt.Sprintf("RemoveGroup Error: %v", removeGroupErr))
 			restresp.Write(w, err.Error(), http.StatusBadRequest)
 			return
 		}
