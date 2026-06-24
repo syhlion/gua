@@ -1,5 +1,7 @@
 # gua: Redis → PostgreSQL (River) migration plan
 
+> 🌐 **English** · [繁體中文](pg-migration.zh-TW.md)
+
 > **Status:** in progress on branch `pg-store`. Phase 0 done; Phase 1 **core** proven
 > (groups + Push→Insert + delivery worker + recurring, all green against real Postgres
 > via River). Phase 1 remainder + Phases 2–7 pending.

@@ -1,5 +1,7 @@
 # gua
 
+> 🌐 **English** · [繁體中文](README.zh-TW.md)
+
 Distributed crontab-style scheduler in Go, backed by **PostgreSQL** (via
 [River](https://riverqueue.com)).
 
