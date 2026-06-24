@@ -91,3 +91,12 @@
 **維度**:並發(同秒到期 100/1k/5k/10k)× 存量(active 1k/10k/50k)× 型別(HTTP / GRPC)× 叢集(1 vs 3 台)。
 **誤差地板**:受 **700ms bucket ticker** 限制,無載約 `0–700ms + 執行延遲`;測尾端在壓力下多大。需 sub-second 則 ticker 是改點。
 **驗收門(Phase 6)**:漏觸發 = 0;重複觸發在冪等保護下無副作用;p99 誤差 < 基線校準後門檻。
+
+---
+
+## Next initiative (planned)
+
+- **Redis → PostgreSQL (River)**: [docs/pg-migration.md](docs/pg-migration.md) —
+  move the backing store to Postgres via River, deleting the hand-rolled
+  reliability layer (locks / fence / scan / JobCheck / down-server / SERVER-N
+  fencing). Branch `pg-store` off `harden`.
