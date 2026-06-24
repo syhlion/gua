@@ -73,4 +73,7 @@ type TriggerEnvelope struct {
 	PlanTime  int64  `json:"plan_time"`
 	ExecTime  int64  `json:"exec_time"`
 	Payload   string `json:"payload"`
+	// IdempotencyKey is stable across retries/redeliveries of the same firing;
+	// dedupe on it (delivery is at-least-once). ExecTime is NOT stable.
+	IdempotencyKey string `json:"idempotency_key"`
 }

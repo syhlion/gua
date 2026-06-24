@@ -11,9 +11,9 @@ import (
 	"resty.dev/v3"
 )
 
-// maxConnsPerHost bounds in-flight requests to any single consumer host. The
-// delay-queue spawns a goroutine per firing (unbounded), so this is what caps
-// HTTP delivery concurrency (replacing requestwork's old global cap of 100).
+// maxConnsPerHost bounds in-flight requests to any single consumer host, so a
+// burst of deliveries (River dispatches them concurrently) can't open unbounded
+// connections to one consumer.
 const maxConnsPerHost = 100
 
 // New returns a configured resty client. Configuration only — no HTTP logic.

@@ -20,16 +20,35 @@ execution result, recorded in a short-retention history for monitoring.
 > branch; see [docs/pg-migration.md](docs/pg-migration.md) for why and how the
 > store moved to Postgres.
 
-## Usage
+## Quick start (Docker Compose)
+
+Brings up Postgres + gua (River runs its own migrations on startup):
 
 ```
-$ ./gua start -e env.river.example     # with an env file
-$ ./gua start                          # or rely on the process environment
+docker compose -f docker-compose/docker-compose.yml up --build
+```
+
+Then:
+
+```
+curl localhost:7777/version
+# register a group and schedule a job that fires in 5s:
+curl -XPOST localhost:7777/v1/register/group -d '{"group_name":"demo"}'
+curl -XPOST localhost:7777/v1/add/job -d "{\"group_name\":\"demo\",\"name\":\"hi\",\"exec_time\":$(( $(date +%s) + 5 )),\"request_url\":\"HTTP@https://example.com/hook\",\"interval_pattern\":\"@once\",\"payload\":\"hello\"}"
+```
+
+Console at <http://localhost:7777/ui>.
+
+## Usage (binary)
+
+```
+$ ./gua start -e env.example     # with an env file
+$ ./gua start                    # or rely on the process environment
 ```
 
 Needs a reachable Postgres (`PG_DSN`); River runs its own migrations on startup.
-See [env.river.example](env.river.example) for all knobs (Postgres, history
-retention, logging + rotation).
+See [env.example](env.example) for all knobs (Postgres, history retention,
+logging + rotation).
 
 ## Architecture
 

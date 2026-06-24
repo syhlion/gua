@@ -82,8 +82,11 @@ message JobTrigger {
   string job_name = 2;
   string group_name = 3;
   int64 plan_time = 4;   // scheduled unix seconds
-  int64 exec_time = 5;   // actual dispatch unix seconds
+  int64 exec_time = 5;   // actual dispatch unix seconds (changes per attempt)
   string payload = 6;
+  // idempotency_key is stable across retries/redeliveries of the SAME firing —
+  // dedupe on it (delivery is at-least-once).
+  string idempotency_key = 7;
 }
 message JobResult {
   bool success = 1;

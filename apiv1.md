@@ -47,28 +47,31 @@ The same operations are available over gRPC via the `GuaAdmin` service
 }
 ```
 
+> **`@every` drifts; cron self-corrects.** A recurring job's next occurrence is
+> scheduled (from the completion time) only after the current one is delivered.
+> `@every 5m` therefore drifts by the delivery latency each cycle; use a cron
+> like `*/5 * * * *` if you need to land on fixed wall-clock boundaries.
+
 ## Delivery (what the consumer receives when a job fires)
 
 Both transports carry the same envelope:
 
 - **HTTP** — `POST <target>` with body
-  `{"job_id","job_name","group_name","plan_time","exec_time","payload"}`.
+  `{"job_id","job_name","group_name","plan_time","exec_time","payload","idempotency_key"}`.
   Return `2xx` for success; the body is kept as the result message.
 - **gRPC** — `GuaCallback.OnJobTrigger(JobTrigger) -> JobResult{success,message}`
   (the consumer implements this; gua dials `target`).
+
+**Idempotency.** Delivery is **at-least-once** (River retries failures and
+rescues crashed workers). Dedupe on **`idempotency_key`** — it is stable across
+re-deliveries of the same firing. Do **not** dedupe on `exec_time` (it changes
+per attempt). Equivalent fallback: `job_id` + `plan_time`.
 
 ## Monitoring
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/version` | |
-| GET | `/v1/status` | ready-queue depth, down-server backlog, per-slot health |
+| GET | `/v1/status` | pending-queue depth + queue health (no slots on Postgres) |
 | GET | `/v1/{group}/history?limit=N` | recent executions (success/fail, timings) |
 | GET | `/ui` | single-page engineering console |
-
-## Backup
-
-| Method | Path |
-|---|---|
-| GET | `/{group}/dump` , `/dump/all` |
-| POST | `/import` |

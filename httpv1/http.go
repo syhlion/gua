@@ -32,8 +32,8 @@ func Version(serverVersion string) func(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// Status is a read-only monitoring endpoint: ready-queue depth, orphaned
-// bucket backlog, and per-slot cluster health.
+// Status is a read-only monitoring endpoint: pending-queue depth and queue
+// health (no slots on the Postgres backend).
 func Status(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s, err := quene.Stats()

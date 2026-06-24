@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -99,13 +100,16 @@ func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs])
 		return nil
 	}
 	execTime := time.Now().Unix()
-	resp, derr := deliver(ctx, w.httpClient, a)
+	// River's occurrence id is stable across retries/rescues of THIS firing —
+	// hand it to the consumer as the idempotency key.
+	idemKey := strconv.FormatInt(job.ID, 10)
+	resp, derr := deliver(ctx, w.httpClient, a, idemKey)
 	w.recordExecution(ctx, a, execTime, resp, derr)
 	if derr != nil {
 		w.logger.Error("river delivery error", "job", a.JobId, "error", derr)
 		return derr // River retries per MaxAttempts/backoff
 	}
-	// fire-once: drop the definition after delivery (matches the Redis backend)
+	// fire-once: drop the definition after delivery
 	if a.IntervalPattern == "" || a.IntervalPattern == "@once" {
 		w.pool.Exec(ctx, `DELETE FROM gua_jobs WHERE id=$1`, a.JobId)
 		return nil
@@ -121,27 +125,31 @@ func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs])
 		na := a
 		na.PlanTime = next.Unix()
 		if err := w.insertNext(ctx, na, next); err != nil {
+			// return the error so River retries the whole Work() (re-deliver,
+			// caught by the idempotency key) — the recurring chain can't break
+			// on a transient insert failure.
 			w.logger.Error("river reschedule error", "job", a.JobId, "error", err)
+			return err
 		}
 	}
 	return nil
 }
 
 // deliver sends the trigger envelope to the consumer and returns the result
-// message. Self-contained (kept separate from the Redis worker so that path is
-// untouched).
-func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs) (string, error) {
+// message. idemKey is stable across re-deliveries of this firing.
+func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs, idemKey string) (string, error) {
 	ss := UrlRe.FindStringSubmatch(a.RequestUrl)
 	if len(ss) == 0 {
 		return "", fmt.Errorf("invalid request_url %q", a.RequestUrl)
 	}
 	env := TriggerEnvelope{
-		JobId:     a.JobId,
-		JobName:   a.JobName,
-		GroupName: a.GroupName,
-		PlanTime:  a.PlanTime,
-		ExecTime:  time.Now().Unix(),
-		Payload:   a.Payload,
+		JobId:          a.JobId,
+		JobName:        a.JobName,
+		GroupName:      a.GroupName,
+		PlanTime:       a.PlanTime,
+		ExecTime:       time.Now().Unix(),
+		Payload:        a.Payload,
+		IdempotencyKey: idemKey,
 	}
 	switch ss[1] {
 	case "HTTP":
@@ -169,6 +177,7 @@ func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs) (strin
 		res, err := guaproto.NewGuaCallbackClient(conn).OnJobTrigger(cctx, &guaproto.JobTrigger{
 			JobId: env.JobId, JobName: env.JobName, GroupName: env.GroupName,
 			PlanTime: env.PlanTime, ExecTime: env.ExecTime, Payload: env.Payload,
+			IdempotencyKey: env.IdempotencyKey,
 		})
 		if err != nil {
 			return "", err
@@ -354,7 +363,7 @@ func (q *riverQuene) Push(job *guaproto.Job) error {
 		return errors.New("type error")
 	}
 	ctx := context.Background()
-	// store the definition (source of truth); reject duplicate ids like the Redis backend
+	// store the definition (source of truth); reject duplicate ids
 	ct, err := q.pool.Exec(ctx, `INSERT INTO gua_jobs
 		(id, group_name, name, request_url, payload, interval_pattern, timeout, exectime, active, memo)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,$9) ON CONFLICT (id) DO NOTHING`,
