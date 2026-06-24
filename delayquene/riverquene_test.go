@@ -35,8 +35,8 @@ func newRiverTestQuene(t *testing.T) Quene {
 		t.Fatalf("migrate: %v", err)
 	}
 	pool.Exec(ctx, `TRUNCATE river_job`)
-	pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS gua_groups (group_name text PRIMARY KEY, created_at timestamptz DEFAULT now())`)
-	pool.Exec(ctx, `TRUNCATE gua_groups`)
+	pool.Exec(ctx, `DROP TABLE IF EXISTS gua_jobs`)
+	pool.Exec(ctx, `DROP TABLE IF EXISTS gua_groups`)
 	pool.Close()
 
 	q, err := NewRiver(&RiverConfig{
@@ -111,6 +111,78 @@ func TestRiverRecurring(t *testing.T) {
 		c := count
 		mu.Unlock()
 		t.Fatalf("recurring fired %d times, want >= 2", c)
+	}
+}
+
+// List reflects pushed jobs (gua_jobs source of truth); Delete removes them.
+func TestRiverListDelete(t *testing.T) {
+	q := newRiverTestQuene(t)
+	if err := q.RegisterGroup("GRP"); err != nil {
+		t.Fatalf("RegisterGroup: %v", err)
+	}
+	job := httpJob("GRP", "RJOB3", "http://example.invalid/", "p", "@once")
+	job.Exectime = time.Now().Add(time.Hour).Unix() // far future: stays scheduled
+	if err := q.Push(job); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	jobs, err := q.List("GRP")
+	if err != nil || len(jobs) != 1 || jobs[0].Id != "RJOB3" || jobs[0].Payload != "p" {
+		t.Fatalf("List = %+v, %v", jobs, err)
+	}
+	if err := q.Delete("GRP", "RJOB3"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	jobs, _ = q.List("GRP")
+	if len(jobs) != 0 {
+		t.Fatalf("List after delete = %+v, want empty", jobs)
+	}
+}
+
+// Pause stops a recurring job from firing further.
+func TestRiverPause(t *testing.T) {
+	q := newRiverTestQuene(t)
+	if err := q.RegisterGroup("GRP"); err != nil {
+		t.Fatalf("RegisterGroup: %v", err)
+	}
+	var mu sync.Mutex
+	count := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		count++
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	if err := q.Push(httpJob("GRP", "RJOB4", srv.URL, "x", "@every 1s")); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	// wait for the first fire (River's scheduler has a few seconds of latency)
+	deadline := time.Now().Add(12 * time.Second)
+	for {
+		mu.Lock()
+		c := count
+		mu.Unlock()
+		if c > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("job never fired before pause")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if err := q.Pause("GRP", "RJOB4"); err != nil {
+		t.Fatalf("Pause: %v", err)
+	}
+	mu.Lock()
+	before := count
+	mu.Unlock()
+	time.Sleep(4 * time.Second) // longer than a couple of intervals
+	mu.Lock()
+	after := count
+	mu.Unlock()
+	if after-before > 1 { // allow one in-flight racing the pause
+		t.Fatalf("deliveries continued after pause: before=%d after=%d", before, after)
 	}
 }
 

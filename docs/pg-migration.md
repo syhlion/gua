@@ -86,13 +86,21 @@ Branch `pg-store` off `harden`; docker Postgres up; River + driver chosen
   HTTP POST / gRPC `OnJobTrigger` envelope; recurring self-reschedules via
   cron `Next()`. Tests `TestRiverHTTPDelivery / TestRiverRecurring / TestRiverGroups`
   green against PG. Redis path untouched (miniredis suite still green).
-- [ ] config toggle in `cmd.go` (`redis` | `river`) + PG DSN env.
-- [ ] cron via River **PeriodicJobs** (currently re-insert on each fire — works, but
-  periodic is cleaner for fixed schedules).
+- [x] config toggle: `BACKEND=river` + `PG_DSN` → `startRiver` (`cmdriver.go`);
+  shared `buildRouter`; `env.river.example`. Redis `start()` untouched.
+- [ ] (optional) cron via River **PeriodicJobs** (currently re-insert on each fire —
+  works; periodic is cleaner for fixed schedules).
 
-### Phase 2 — map the rest of the `Quene` surface
-`Pause / Active / Delete / List / Stats / History` onto River — including the
-group-level pause/clear seam above.
+### Phase 2 — map the rest of the `Quene` surface ✅ done
+- [x] `gua_jobs` table = source of truth for job definitions (active/paused),
+  River holds the scheduled occurrences.
+- [x] `List / Delete / Remove / Edit / Pause / Active / Stats` on `gua_jobs`
+  (+ cancel the not-yet-run River occurrence on pause/delete). The worker
+  re-checks `active` before delivering and before rescheduling, so pause is
+  robust; `@once` jobs are dropped after firing (matches Redis). group-level
+  `job/clear` and `job/delete/{name}` work via List+Delete.
+  Tests: `TestRiverListDelete`, `TestRiverPause` (green against PG).
+- [ ] `History` → Phase 4 (PG executions table); currently returns empty.
 
 ### Phase 3 — tests
 Re-point the integration tests (`newTestQuene`) to the River backend

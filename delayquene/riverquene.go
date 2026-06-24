@@ -49,6 +49,7 @@ func (guaJobArgs) Kind() string { return "gua_delivery" }
 // OnJobTrigger). On success it re-schedules recurring jobs via insertNext.
 type guaDeliverWorker struct {
 	river.WorkerDefaults[guaJobArgs]
+	pool        *pgxpool.Pool
 	httpClient  *resty.Client
 	machineHost string
 	machineMac  string
@@ -57,14 +58,31 @@ type guaDeliverWorker struct {
 	insertNext  func(ctx context.Context, args guaJobArgs, at time.Time) error
 }
 
+// jobActive reports whether the job's definition still exists and is active.
+// A missing row (deleted) or active=false (paused) means: do not deliver.
+func (w *guaDeliverWorker) jobActive(ctx context.Context, jobId string) bool {
+	var active bool
+	err := w.pool.QueryRow(ctx, `SELECT active FROM gua_jobs WHERE id=$1`, jobId).Scan(&active)
+	return err == nil && active
+}
+
 func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs]) error {
 	a := job.Args
+	// honour pause/delete that happened after this occurrence was scheduled
+	if !w.jobActive(ctx, a.JobId) {
+		return nil
+	}
 	if err := deliver(ctx, w.httpClient, a); err != nil {
 		w.logger.WithError(err).Errorf("river delivery error job %s", a.JobId)
 		return err // River retries per MaxAttempts/backoff
 	}
-	// recurring: schedule the next occurrence
-	if a.IntervalPattern != "" && a.IntervalPattern != "@once" {
+	// fire-once: drop the definition after delivery (matches the Redis backend)
+	if a.IntervalPattern == "" || a.IntervalPattern == "@once" {
+		w.pool.Exec(ctx, `DELETE FROM gua_jobs WHERE id=$1`, a.JobId)
+		return nil
+	}
+	// recurring: schedule the next occurrence (unless paused/deleted meanwhile)
+	if w.jobActive(ctx, a.JobId) {
 		sch, err := Parse(a.IntervalPattern)
 		if err != nil {
 			w.logger.WithError(err).Errorf("river cron parse error job %s", a.JobId)
@@ -166,8 +184,27 @@ func NewRiver(cfg *RiverConfig) (Quene, error) {
 		pool.Close()
 		return nil, err
 	}
+	// gua_jobs is the source of truth for a job's definition (active or paused),
+	// independent of whether an occurrence is currently scheduled in River.
+	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS gua_jobs (
+		id               text PRIMARY KEY,
+		group_name       text NOT NULL,
+		name             text NOT NULL,
+		request_url      text NOT NULL,
+		payload          text NOT NULL DEFAULT '',
+		interval_pattern text NOT NULL DEFAULT '@once',
+		timeout          bigint NOT NULL DEFAULT 0,
+		exectime         bigint NOT NULL,
+		active           boolean NOT NULL DEFAULT true,
+		memo             text NOT NULL DEFAULT '',
+		created_at       timestamptz NOT NULL DEFAULT now());
+		CREATE INDEX IF NOT EXISTS gua_jobs_group_idx ON gua_jobs (group_name);`); err != nil {
+		pool.Close()
+		return nil, err
+	}
 
 	work := &guaDeliverWorker{
+		pool:        pool,
 		httpClient:  httpclient.New(60*time.Second, false),
 		machineHost: cfg.MachineHost,
 		machineMac:  cfg.MachineMac,
@@ -212,6 +249,48 @@ func (q *riverQuene) Close() {
 	q.pool.Close()
 }
 
+func argsOf(job *guaproto.Job) guaJobArgs {
+	return guaJobArgs{
+		JobId:           job.Id,
+		JobName:         job.Name,
+		GroupName:       job.GroupName,
+		RequestUrl:      job.RequestUrl,
+		Payload:         job.Payload,
+		IntervalPattern: job.IntervalPattern,
+		Timeout:         job.Timeout,
+		PlanTime:        job.Exectime,
+	}
+}
+
+// insertOccurrence schedules one River occurrence for a job at `at`.
+func (q *riverQuene) insertOccurrence(ctx context.Context, job *guaproto.Job, at time.Time) error {
+	a := argsOf(job)
+	a.PlanTime = at.Unix()
+	_, err := q.client.Insert(ctx, a, &river.InsertOpts{ScheduledAt: at})
+	return err
+}
+
+// cancelOccurrences removes any not-yet-run River occurrence of a job (used by
+// Pause/Delete). Running/finished occurrences are left alone.
+func (q *riverQuene) cancelOccurrences(ctx context.Context, jobId string) error {
+	_, err := q.pool.Exec(ctx, `DELETE FROM river_job
+		WHERE kind='gua_delivery' AND args->>'job_id'=$1
+		AND state IN ('available','scheduled','retryable','pending')`, jobId)
+	return err
+}
+
+func (q *riverQuene) loadJob(ctx context.Context, jobId string) (*guaproto.Job, error) {
+	j := &guaproto.Job{}
+	err := q.pool.QueryRow(ctx, `SELECT id, group_name, name, request_url, payload,
+		interval_pattern, timeout, exectime, active, memo FROM gua_jobs WHERE id=$1`, jobId).
+		Scan(&j.Id, &j.GroupName, &j.Name, &j.RequestUrl, &j.Payload,
+			&j.IntervalPattern, &j.Timeout, &j.Exectime, &j.Active, &j.Memo)
+	if err != nil {
+		return nil, err
+	}
+	return j, nil
+}
+
 func (q *riverQuene) Push(job *guaproto.Job) error {
 	ss := UrlRe.FindStringSubmatch(job.RequestUrl)
 	if len(ss) == 0 {
@@ -222,17 +301,20 @@ func (q *riverQuene) Push(job *guaproto.Job) error {
 	default:
 		return errors.New("type error")
 	}
-	_, err := q.client.Insert(context.Background(), guaJobArgs{
-		JobId:           job.Id,
-		JobName:         job.Name,
-		GroupName:       job.GroupName,
-		RequestUrl:      job.RequestUrl,
-		Payload:         job.Payload,
-		IntervalPattern: job.IntervalPattern,
-		Timeout:         job.Timeout,
-		PlanTime:        job.Exectime,
-	}, &river.InsertOpts{ScheduledAt: time.Unix(job.Exectime, 0)})
-	return err
+	ctx := context.Background()
+	// store the definition (source of truth); reject duplicate ids like the Redis backend
+	ct, err := q.pool.Exec(ctx, `INSERT INTO gua_jobs
+		(id, group_name, name, request_url, payload, interval_pattern, timeout, exectime, active, memo)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,$9) ON CONFLICT (id) DO NOTHING`,
+		job.Id, job.GroupName, job.Name, job.RequestUrl, job.Payload,
+		job.IntervalPattern, job.Timeout, job.Exectime, job.Memo)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("key duplicate")
+	}
+	return q.insertOccurrence(ctx, job, time.Unix(job.Exectime, 0))
 }
 
 func (q *riverQuene) RegisterGroup(groupName string) error {
@@ -283,16 +365,93 @@ func (q *riverQuene) QueryGroups() ([]string, error) {
 	return out, rows.Err()
 }
 
-// --- Phase 2: job-level operations mapped onto River (List/Delete/Pause/...) ---
-var errRiverTODO = errors.New("not implemented in river backend yet (Phase 2)")
+// --- job-level operations: gua_jobs is the source of truth; River holds occurrences ---
 
-func (q *riverQuene) Remove(jobId string) error                       { return errRiverTODO }
-func (q *riverQuene) Edit(group, jobId, requestUrl, payload string) error { return errRiverTODO }
-func (q *riverQuene) Active(group, jobId string, exectime int64) error { return errRiverTODO }
-func (q *riverQuene) Pause(group, jobId string) error                 { return errRiverTODO }
-func (q *riverQuene) Delete(group, jobId string) error                { return errRiverTODO }
-func (q *riverQuene) List(group string) ([]*guaproto.Job, error)      { return nil, errRiverTODO }
-func (q *riverQuene) Stats() (*Stats, error)                          { return &Stats{}, nil }
+func (q *riverQuene) List(group string) ([]*guaproto.Job, error) {
+	rows, err := q.pool.Query(context.Background(), `SELECT id, group_name, name, request_url,
+		payload, interval_pattern, timeout, exectime, active, memo FROM gua_jobs
+		WHERE group_name=$1 ORDER BY exectime`, group)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	jobs := make([]*guaproto.Job, 0)
+	for rows.Next() {
+		j := &guaproto.Job{}
+		if err := rows.Scan(&j.Id, &j.GroupName, &j.Name, &j.RequestUrl, &j.Payload,
+			&j.IntervalPattern, &j.Timeout, &j.Exectime, &j.Active, &j.Memo); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+func (q *riverQuene) Delete(group, jobId string) error {
+	ctx := context.Background()
+	if _, err := q.pool.Exec(ctx, `DELETE FROM gua_jobs WHERE id=$1 AND group_name=$2`, jobId, group); err != nil {
+		return err
+	}
+	return q.cancelOccurrences(ctx, jobId)
+}
+
+func (q *riverQuene) Remove(jobId string) error {
+	ctx := context.Background()
+	if _, err := q.pool.Exec(ctx, `DELETE FROM gua_jobs WHERE id=$1`, jobId); err != nil {
+		return err
+	}
+	return q.cancelOccurrences(ctx, jobId)
+}
+
+func (q *riverQuene) Edit(group, jobId, requestUrl, payload string) error {
+	if ss := UrlRe.FindStringSubmatch(requestUrl); len(ss) == 0 {
+		return errors.New("type error")
+	}
+	ct, err := q.pool.Exec(context.Background(),
+		`UPDATE gua_jobs SET request_url=$1, payload=$2 WHERE id=$3 AND group_name=$4`,
+		requestUrl, payload, jobId, group)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return errors.New("no job")
+	}
+	return nil
+}
+
+func (q *riverQuene) Pause(group, jobId string) error {
+	ctx := context.Background()
+	if _, err := q.pool.Exec(ctx,
+		`UPDATE gua_jobs SET active=false WHERE id=$1 AND group_name=$2`, jobId, group); err != nil {
+		return err
+	}
+	// drop the pending occurrence so it won't fire (the worker also re-checks active)
+	return q.cancelOccurrences(ctx, jobId)
+}
+
+func (q *riverQuene) Active(group, jobId string, exectime int64) error {
+	ctx := context.Background()
+	if _, err := q.pool.Exec(ctx,
+		`UPDATE gua_jobs SET active=true, exectime=$1 WHERE id=$2 AND group_name=$3`,
+		exectime, jobId, group); err != nil {
+		return err
+	}
+	job, err := q.loadJob(ctx, jobId)
+	if err != nil {
+		return err
+	}
+	return q.insertOccurrence(ctx, job, time.Unix(exectime, 0))
+}
+
+func (q *riverQuene) Stats() (*Stats, error) {
+	s := &Stats{Now: time.Now().Unix(), Servers: []ServerStat{}}
+	err := q.pool.QueryRow(context.Background(), `SELECT count(*) FROM river_job
+		WHERE kind='gua_delivery' AND state IN ('available','scheduled','retryable','pending')`).
+		Scan(&s.ReadyQueueDepth)
+	return s, err
+}
+
+// History — Phase 4 (PG executions table). Empty for now.
 func (q *riverQuene) History(group string, limit int) ([]*HistoryEntry, error) {
 	return []*HistoryEntry{}, nil
 }

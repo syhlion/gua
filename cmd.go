@@ -144,7 +144,40 @@ func cmdInit(c *cli.Context) (conf *Config) {
 	return
 }
 
+// buildRouter wires the HTTP API. mig may be nil (e.g. the Postgres backend has
+// no Redis dump/import), in which case those routes are omitted.
+func buildRouter(quene delayquene.Quene, mig *migrate.Migrate) *mux.Router {
+	r := mux.NewRouter()
+	r.HandleFunc("/version", Version(version)).Methods("GET")
+	r.HandleFunc("/ui", UI()).Methods("GET")
+	sub := r.PathPrefix("/v1/").Subrouter()
+	sub.HandleFunc("/status", httpv1.Status(quene)).Methods("GET")
+	sub.HandleFunc("/register/group", httpv1.RegisterGroup(quene)).Methods("POST")
+	sub.HandleFunc("/remove/group", httpv1.RemoveGroup(quene)).Methods("POST")
+	sub.HandleFunc("/add/job", httpv1.AddJob(quene)).Methods("POST")
+	sub.HandleFunc("/delete/job", httpv1.RemoveJob(quene)).Methods("POST")
+	sub.HandleFunc("/pause/job", httpv1.PauseJob(quene)).Methods("POST")
+	sub.HandleFunc("/active/job", httpv1.ActiveJob(quene)).Methods("POST")
+	sub.HandleFunc("/edit/job", httpv1.EditJob(quene)).Methods("POST")
+	sub.HandleFunc("/group/list", httpv1.GetGroupList(quene)).Methods("GET")
+	sub.HandleFunc("/{group_name}/job/list", httpv1.GetJobList(quene)).Methods("GET")
+	sub.HandleFunc("/{group_name}/group/info", httpv1.GroupInfo(quene)).Methods("GET")
+	sub.HandleFunc("/{group_name}/history", httpv1.History(quene)).Methods("GET")
+	sub.HandleFunc("/{group_name}/job/clear", httpv1.GroupJobClear(quene)).Methods(http.MethodDelete)
+	sub.HandleFunc("/{group_name}/job/delete/{job_name}", httpv1.RemoveJobsByJobName(quene)).Methods(http.MethodDelete)
+	if mig != nil {
+		sub.HandleFunc("/{group_name}/dump", httpv1.DumpBy(mig)).Methods("GET")
+		sub.HandleFunc("/dump/all", httpv1.DumpAll(mig)).Methods("GET")
+		sub.HandleFunc("/import", httpv1.Import(mig)).Methods("POST")
+	}
+	return r
+}
+
 func start(c *cli.Context) {
+	if os.Getenv("BACKEND") == "river" {
+		startRiver(c)
+		return
+	}
 
 	conf := cmdInit(c)
 	//init ready quene redis pool
@@ -327,29 +360,7 @@ func start(c *cli.Context) {
 	httpErr := make(chan error)
 	grpcErr := make(chan error)
 	httpApiListener, err := net.Listen("tcp", conf.HttpListen)
-	r := mux.NewRouter()
-	r.HandleFunc("/version", Version(version)).Methods("GET")
-	r.HandleFunc("/ui", UI()).Methods("GET")
-	subRouter := r.PathPrefix("/v1/").Subrouter()
-	subRouter.HandleFunc("/status", httpv1.Status(quene)).Methods("GET")
-	subRouter.HandleFunc("/register/group", httpv1.RegisterGroup(quene)).Methods("POST")
-	subRouter.HandleFunc("/remove/group", httpv1.RemoveGroup(quene)).Methods("POST")
-	subRouter.HandleFunc("/add/job", httpv1.AddJob(quene)).Methods("POST")
-	subRouter.HandleFunc("/delete/job", httpv1.RemoveJob(quene)).Methods("POST")
-	subRouter.HandleFunc("/pause/job", httpv1.PauseJob(quene)).Methods("POST")
-	subRouter.HandleFunc("/active/job", httpv1.ActiveJob(quene)).Methods("POST")
-	subRouter.HandleFunc("/edit/job", httpv1.EditJob(quene)).Methods("POST")
-	subRouter.HandleFunc("/group/list", httpv1.GetGroupList(quene)).Methods("GET")
-
-	subRouter.HandleFunc("/{group_name}/job/list", httpv1.GetJobList(quene)).Methods("GET")
-	subRouter.HandleFunc("/{group_name}/group/info", httpv1.GroupInfo(quene)).Methods("GET")
-	subRouter.HandleFunc("/{group_name}/history", httpv1.History(quene)).Methods("GET")
-	subRouter.HandleFunc("/{group_name}/dump", httpv1.DumpBy(migrate)).Methods("GET")
-	subRouter.HandleFunc("/{group_name}/job/clear", httpv1.GroupJobClear(quene)).Methods(http.MethodDelete)
-	subRouter.HandleFunc("/{group_name}/job/delete/{job_name}", httpv1.RemoveJobsByJobName(quene)).Methods(http.MethodDelete)
-
-	subRouter.HandleFunc("/dump/all", httpv1.DumpAll(migrate)).Methods("GET")
-	subRouter.HandleFunc("/import", httpv1.Import(migrate)).Methods("POST")
+	r := buildRouter(quene, migrate)
 	server := http.Server{
 		ReadTimeout: 3 * time.Second,
 		Handler:     handlers.CORS()(r),
