@@ -1,5 +1,27 @@
 [unrelease]
 
+[v3.1.0]
+
+[Added]
+
+* `idempotency_key` in the delivery envelope (HTTP body + gRPC JobTrigger) = River's
+  occurrence id, stable across retries/redeliveries of the same firing — consumers
+  dedupe on it (delivery is at-least-once).
+* docs: Docker Compose quick start; idempotency + `@every`-drift-vs-cron notes;
+  Traditional Chinese (zh-TW) versions of the docs.
+
+[Fixed]
+
+* recurring chain no longer breaks on a transient insert error — `insertNext`
+  failure now retries the whole `Work()` via River.
+
+[Changed]
+
+* Postgres-only cleanup: removed the old Redis `env.example` (`env.river.example`
+  renamed to `env.example`, `BACKEND` toggle dropped); docker-compose rewritten for
+  Postgres + gua; Dockerfile bumped to Go 1.25; deleted dead `loghook/` and stale
+  `testdata/`; corrected stale comments and the removed dump/import API section.
+
 [v3.0.0] — Postgres / River (breaking)
 
 [Changed]
