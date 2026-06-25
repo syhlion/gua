@@ -96,7 +96,7 @@
 
 ## Next initiative (planned)
 
-- **Redis → PostgreSQL (River)**: [docs/pg-migration.md](docs/pg-migration.md) —
+- **Redis → PostgreSQL (River)**: [docs/pg-migration.md](pg-migration.md) —
   move the backing store to Postgres via River, deleting the hand-rolled
   reliability layer (locks / fence / scan / JobCheck / down-server / SERVER-N
   fencing). Branch `pg-store` off `harden`.

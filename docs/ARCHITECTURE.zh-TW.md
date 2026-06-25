@@ -39,7 +39,7 @@ gua 是一套分散式、crontab 風格的排程器,後端為 PostgreSQL(透過
   (`SKIP LOCKED` 讓「撈取」是 exactly-once;會重投的是「投遞成功後、commit 前崩潰」那個窗口。)
 - **時間特性**:排在未來的 job 由 River 的 scheduler 提升(promote),相對於
   in-memory ticker 會多幾秒延遲。對分鐘/小時級的排程無感;若要 sub-second 精度,
-  這就是換取持久性的代價。實測數字見 [EVAL.zh-TW.md](../EVAL.zh-TW.md)。
+  這就是換取持久性的代價。實測數字見 [EVAL.zh-TW.md](EVAL.zh-TW.md)。
 
 ## 叢集與 HA
 
@@ -62,8 +62,8 @@ leader election(PG advisory lock)來協調單例維護任務(scheduler / rescuer
 
 ## 延伸閱讀
 
-- [apiv1.zh-TW.md](../apiv1.zh-TW.md) — admin REST API
+- [apiv1.zh-TW.md](apiv1.zh-TW.md) — admin REST API
 - [`proto/gua.proto`](../proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
 - [MONITORING.zh-TW.md](MONITORING.zh-TW.md) — 狀態 / 歷史 / console / logging
-- [EVAL.zh-TW.md](../EVAL.zh-TW.md) — 取代 JobScheduler 評估
+- [EVAL.zh-TW.md](EVAL.zh-TW.md) — 取代 JobScheduler 評估
 - [pg-migration.zh-TW.md](pg-migration.zh-TW.md) — Redis → Postgres 遷移
