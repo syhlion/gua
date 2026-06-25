@@ -1,5 +1,7 @@
 [unrelease]
 
+[v3.2.0]
+
 [Added]
 
 * health/readiness probes: `GET /healthz` (liveness, no DB) and `GET /readyz`
@@ -15,6 +17,20 @@
   River workers/pool close.
 * HTTP server gains `WriteTimeout`, `IdleTimeout`, and `ReadHeaderTimeout`
   (slowloris guard) — previously only `ReadTimeout` was set.
+
+[Security]
+
+* bump grpc 1.53.0 → 1.81.1 and protobuf 1.28.1 → 1.36.11, clearing 3
+  Dependabot alerts on the gRPC delivery/admin path (critical: authz bypass via
+  missing leading slash in `:path`; high: HTTP/2 Rapid Reset; medium: protojson
+  infinite loop).
+
+[CI]
+
+* modernized the Drone pipeline: Go 1.25 + a `postgres:16` service so the
+  River/Postgres tests actually run (the old step only did `go build` with no
+  DB); docker push scoped to master + tags; removed the draft github-release
+  step (releases are cut manually with `gh`). Deleted the dead `.gitlab-ci.yml`.
 
 [v3.1.0]
 
