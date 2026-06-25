@@ -2,14 +2,14 @@
 
 > 🌐 **English** · [繁體中文](pg-migration.zh-TW.md)
 
-> **Status:** in progress on branch `pg-store`. Phase 0 done; Phase 1 **core** proven
-> (groups + Push→Insert + delivery worker + recurring, all green against real Postgres
-> via River). Phase 1 remainder + Phases 2–7 pending.
-> **Base:** this repo, branch `harden`. Work is on the `pg-store` branch off `harden`.
+> **Status:** ✅ **done & merged to `master`** (the Redis line lives on `harden`). All
+> phases complete; this doc is kept as the migration record / rationale. Postgres +
+> River is now the only backing store — the Redis impl and its compensation layer were
+> deleted (Phase 5).
 >
 > **Run the PG-backed tests:** start Postgres and point the tests at it:
 > `GUA_PG_DSN='postgres://USER:PASS@HOST:PORT/DB?sslmode=disable' go test ./delayquene/ -run TestRiver -v`
-> (without `GUA_PG_DSN` they skip; the Redis/miniredis suite is unaffected.)
+> (without `GUA_PG_DSN` they skip.)
 > **Decision (2026-06-24):** move gua's backing service from Redis to **PostgreSQL**,
 > using **River** (`github.com/riverqueue/river`). Binding to Postgres is accepted.
 > Self-contained — can be handed to a separate session.
@@ -90,8 +90,15 @@ Branch `pg-store` off `harden`; docker Postgres up; River + driver chosen
   green against PG. Redis path untouched (miniredis suite still green).
 - [x] config toggle: `BACKEND=river` + `PG_DSN` → `startRiver` (`cmdriver.go`);
   shared `buildRouter`; `env.river.example`. Redis `start()` untouched.
-- [ ] (optional) cron via River **PeriodicJobs** (currently re-insert on each fire —
-  works; periodic is cleaner for fixed schedules).
+- [x] (optional) cron via River **PeriodicJobs** — **evaluated, declined.** River's
+  PeriodicJobs keep their schedule state **in-memory on the elected leader** and are
+  non-durable: per River's own docs, "anytime a process quits or a new leader is
+  elected, the whole process starts over." gua instead inserts each next occurrence
+  as a **durable `river_job` row** (`ScheduledAt`), which survives restarts/leader
+  changes — strictly better for this migration's durability goal — and fits gua's
+  **dynamic, per-job, pausable, DB-sourced** model (jobs are added at runtime and
+  gated by `gua_jobs.active`), which a static leader-held periodic registry serves
+  poorly. Decision: keep the self-reschedule-as-durable-row approach.
 
 ### Phase 2 — map the rest of the `Quene` surface ✅ done
 - [x] `gua_jobs` table = source of truth for job definitions (active/paused),
@@ -110,9 +117,11 @@ Branch `pg-store` off `harden`; docker Postgres up; River + driver chosen
 - [x] **no double-run**: `TestRiverNoDuplicate` (30 same-time jobs each fire
   exactly once via SKIP LOCKED).
 - [x] **retry/backoff**: `TestRiverRetry` (fail once → River retries → succeed).
-- [ ] crash-mid-process → **River rescuer** re-runs: rescuer is built in
-  (`RescueStuckJobsAfter`); a cheap in-process kill test is awkward, so this
-  relies on River's own guarantee. Add a slow/manual test before cutover.
+- [x] crash-mid-process → **River rescuer** re-runs: `TestRiverRescuer`
+  (`delayquene/rescuer_test.go`) drives a stand-in worker that never returns
+  (row stuck in `running`), then asserts the rescuer re-runs it. Squeezes the
+  rescue window via `RescueStuckJobsAfter`/`JobTimeout` so it doesn't wait the
+  1h default; gated by `GUA_PG_DSN`, runs in CI against `postgres:16`.
 
 ### Phase 4 — monitoring on PG ✅ done
 - [x] `gua_executions` table; the worker records every attempt (success/fail,
@@ -151,7 +160,8 @@ that scenario arises.
 
 ## Acceptance
 
-- [ ] **job not lost**: kill a worker mid-run → River rescuer re-runs it (kill-mid-process test).
+- [x] **job not lost**: kill a worker mid-run → River rescuer re-runs it
+  (`TestRiverRescuer`, kill-mid-process test).
 - [ ] delay / cron fire at the right time.
 - [ ] multi-worker concurrent **dequeue** never double-runs (SKIP LOCKED).
 - [ ] retry / backoff / `failed` terminal correct. **(NEW behavior — confirm intended.)**

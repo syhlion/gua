@@ -1,5 +1,18 @@
 [unrelease]
 
+[Added]
+
+* `TestRiverRescuer`: crash-mid-process acceptance test — a worker that dies with
+  its job stuck in `running` is re-run by River's rescuer. Closes the last open
+  "job not lost" acceptance item from the Postgres migration. Gated by
+  `GUA_PG_DSN`; runs in CI against `postgres:16`.
+
+[Docs]
+
+* recorded the decision to keep durable self-rescheduling (next occurrence as a
+  `river_job` row) rather than adopt River **PeriodicJobs**, whose schedule state
+  is in-memory/leader-only and non-durable — see `docs/pg-migration.md`.
+
 [v3.2.0]
 
 [Added]

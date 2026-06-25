@@ -94,9 +94,11 @@
 
 ---
 
-## Next initiative (planned)
+## Next initiative — ✅ done & merged
 
 - **Redis → PostgreSQL (River)**: [docs/pg-migration.md](pg-migration.md) —
-  move the backing store to Postgres via River, deleting the hand-rolled
+  moved the backing store to Postgres via River, deleting the hand-rolled
   reliability layer (locks / fence / scan / JobCheck / down-server / SERVER-N
-  fencing). Branch `pg-store` off `harden`.
+  fencing). Shipped as gua 3.0 (the Redis line remains on `harden`). See
+  pg-migration.md for the full record, including the decision to keep durable
+  self-rescheduling rather than adopt River PeriodicJobs.
