@@ -5,6 +5,7 @@
 package delayquene
 
 import (
+	"context"
 	"regexp"
 
 	guaproto "github.com/syhlion/gua/proto"
@@ -31,6 +32,8 @@ type Quene interface {
 	ExistsGroup(groupName string) (exists int, err error)
 	Stats() (s *Stats, err error)
 	History(group string, limit int) (entries []*HistoryEntry, err error)
+	// Ping checks backing-store reachability for readiness probes.
+	Ping(ctx context.Context) (err error)
 }
 
 // ServerStat is the health of a single node (kept for API compatibility; the

@@ -69,6 +69,11 @@ mTLS / gateway）保護。
 | Method | Path | 說明 |
 |---|---|---|
 | GET | `/version` | |
+| GET | `/healthz` | liveness——進程有在服務就回 `200 ok`,不碰 DB |
+| GET | `/readyz` | readiness——Postgres 可達回 `200 ready`,否則 `503` |
 | GET | `/v1/status` | 待跑佇列深度 + 佇列健康(Postgres 無 slot) |
 | GET | `/v1/{group}/history?limit=N` | 最近執行(成功/失敗、時間) |
 | GET | `/ui` | 一頁工程 console |
+
+> Kubernetes:`livenessProbe` 指 `/healthz`、`readinessProbe` 指 `/readyz`,
+> DB 不可達時就把流量擋在外面。

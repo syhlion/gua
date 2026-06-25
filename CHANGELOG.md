@@ -1,5 +1,21 @@
 [unrelease]
 
+[Added]
+
+* health/readiness probes: `GET /healthz` (liveness, no DB) and `GET /readyz`
+  (200 when Postgres is reachable, 503 otherwise) for Kubernetes probes.
+* end-to-end tests driving the real REST router + gRPC GuaAdmin against a live
+  Postgres, asserting delivery over both HTTP and gRPC transports (the gRPC
+  delivery path was previously untested). Run an isolated `gua_e2e` database.
+
+[Changed / hardened]
+
+* graceful shutdown: on SIGINT/SIGTERM the HTTP and gRPC servers now drain
+  in-flight requests (`server.Shutdown` + `grpcServer.GracefulStop`) before the
+  River workers/pool close.
+* HTTP server gains `WriteTimeout`, `IdleTimeout`, and `ReadHeaderTimeout`
+  (slowloris guard) — previously only `ReadTimeout` was set.
+
 [v3.1.0]
 
 [Added]
