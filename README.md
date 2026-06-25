@@ -1,6 +1,6 @@
 # gua
 
-> 🌐 **English** · [繁體中文](README.zh-TW.md)
+> 🌐 **English** · [繁體中文](docs/README.zh-TW.md)
 
 Distributed crontab-style scheduler in Go, backed by **PostgreSQL** (via
 [River](https://riverqueue.com)).
@@ -64,10 +64,10 @@ rescuer. Full write-up (pipeline, HA, schema) in
 ## Docs
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture, pipeline, HA (with diagrams)
-- [apiv1.md](./apiv1.md) — admin REST API
+- [apiv1.md](docs/apiv1.md) — admin REST API
 - [`proto/gua.proto`](./proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
 - [docs/MONITORING.md](docs/MONITORING.md) — `/v1/status`, `/v1/{group}/history`, `/ui`, logging
-- [EVAL.md](./EVAL.md) — JobScheduler replacement evaluation & migration
+- [EVAL.md](docs/EVAL.md) — JobScheduler replacement evaluation & migration
 
 ## Tests
 

@@ -43,7 +43,7 @@ next occurrence (cron `Next()`). A failed delivery is retried by River.
 - **Timing**: jobs scheduled for the future are promoted by River's scheduler,
   which adds a few seconds of latency vs an in-memory ticker. For scheduling at
   minute/hour granularity this is irrelevant; for sub-second precision it is the
-  trade-off for durability. See [EVAL.md](../EVAL.md) for measured numbers.
+  trade-off for durability. See [EVAL.md](EVAL.md) for measured numbers.
 
 ## Cluster & HA
 
@@ -67,8 +67,8 @@ and its rescuer reclaims jobs left `running` by a crashed worker.
 
 ## See also
 
-- [apiv1.md](../apiv1.md) — admin REST API
+- [apiv1.md](apiv1.md) — admin REST API
 - [`proto/gua.proto`](../proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
 - [MONITORING.md](MONITORING.md) — status / history / console / logging
-- [EVAL.md](../EVAL.md) — JobScheduler replacement evaluation
+- [EVAL.md](EVAL.md) — JobScheduler replacement evaluation
 - [pg-migration.md](pg-migration.md) — the Redis → Postgres migration
