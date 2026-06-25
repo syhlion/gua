@@ -1,6 +1,9 @@
 # gua
 
-> 🌐 [English](../README.md) · **繁體中文**
+[![docs: English](https://img.shields.io/badge/docs-English-lightgrey)](../README.md)
+[![docs: 繁體中文](https://img.shields.io/badge/docs-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-blue)](README.zh-TW.md)
+[![Go](https://img.shields.io/github/go-mod/go-version/syhlion/gua)](../go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](../LICENSE)
 
 以 Go 實作的分散式 crontab 風格排程器,後端為 **PostgreSQL**(透過
 [River](https://riverqueue.com))。
