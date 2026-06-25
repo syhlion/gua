@@ -1,58 +1,48 @@
+---
 kind: pipeline
+type: docker
 name: default
 
+# A Postgres service is started alongside the pipeline so the River/Postgres
+# integration tests in delayquene actually run (they skip when GUA_PG_DSN is
+# unset). The test step waits for it to accept connections before running.
+services:
+  - name: database
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gua
+      POSTGRES_PASSWORD: gua
+      POSTGRES_DB: gua
+
 steps:
-- name: test
-  image: golang
-  commands:
-  - go build
+  - name: test
+    image: golang:1.25-alpine
+    environment:
+      CGO_ENABLED: "0"
+      GUA_PG_DSN: postgres://gua:gua@database:5432/gua?sslmode=disable
+    commands:
+      - apk add --no-cache git postgresql-client
+      - until pg_isready -h database -U gua -d gua; do echo "waiting for postgres"; sleep 1; done
+      - go build ./...
+      - go vet ./...
+      - go test ./...
 
-- name: docker
-  image: plugins/docker
-  settings:
-    repo: syhlion/gua
-    auto_tag: true
-    purge: true
-    username: 
+  # Build and push the runtime image. Releases (git tags + GitHub Release notes)
+  # are cut manually with the gh CLI, so there is no auto github-release step
+  # here any more — it used to spam draft releases and collided with manual tags.
+  - name: docker
+    image: plugins/docker
+    settings:
+      repo: syhlion/gua
+      auto_tag: true
+      purge: true
+      username:
         from_secret: docker_account
-    password: 
+      password:
         from_secret: docker_password
-
-- name: build
-  image: golang
-  commands:
-  - git fetch --tags
-  - make build/linux_amd64.tar.gz
-  - make build/darwin_amd64.tar.gz
-  when:
-    event: tag
-- name: publish
-  image: plugins/github-release
-  settings:
-    api_key:
-      from_secret: github_token
-    files: build/*
-    checksum:
-        - md5
-    title: ${DRONE_TAG}
-    note: CHANGELOG.md
-    draft: true
-  when:
-    event: tag
-- name: notify
-  image: appleboy/drone-telegram
-  settings:
-    message: >
-        {{#success build.status}}
-            {{repo.namespace}}/{{repo.name}} build {{build.number}}. commit {{commit.sha}} succeeded. Good job.
-            {{else}}
-            {{repo.namespace}}/{{repo.name}} build {{build.number}}. commit {{commit.sha}} failed. Fix me please.
-        {{/success}}
-    token:
-        from_secret: bot_token
-    to:
-        from_secret: bot_to
-  when:
-    status:
-    - failure
-    - success
+    when:
+      branch:
+        - master
+      event:
+        - push
+        - tag
