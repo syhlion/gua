@@ -310,6 +310,11 @@ func (q *riverQuene) Close() {
 	q.pool.Close()
 }
 
+// Ping verifies the Postgres pool can reach the database (readiness probe).
+func (q *riverQuene) Ping(ctx context.Context) error {
+	return q.pool.Ping(ctx)
+}
+
 func argsOf(job *guaproto.Job) guaJobArgs {
 	return guaJobArgs{
 		JobId:           job.Id,

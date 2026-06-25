@@ -72,6 +72,11 @@ per attempt). Equivalent fallback: `job_id` + `plan_time`.
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/version` | |
+| GET | `/healthz` | liveness — `200 ok` while the process serves; does not touch the DB |
+| GET | `/readyz` | readiness — `200 ready` when Postgres is reachable, `503` otherwise |
 | GET | `/v1/status` | pending-queue depth + queue health (no slots on Postgres) |
 | GET | `/v1/{group}/history?limit=N` | recent executions (success/fail, timings) |
 | GET | `/ui` | single-page engineering console |
+
+> For Kubernetes: point `livenessProbe` at `/healthz` and `readinessProbe` at
+> `/readyz` so traffic is held back while the database is unreachable.
