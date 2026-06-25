@@ -1,6 +1,9 @@
 # gua
 
-> 🌐 **English** · [繁體中文](docs/README.zh-TW.md)
+[![docs: English](https://img.shields.io/badge/docs-English-blue)](README.md)
+[![docs: 繁體中文](https://img.shields.io/badge/docs-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-lightgrey)](docs/README.zh-TW.md)
+[![Go](https://img.shields.io/github/go-mod/go-version/syhlion/gua)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Distributed crontab-style scheduler in Go, backed by **PostgreSQL** (via
 [River](https://riverqueue.com)).
