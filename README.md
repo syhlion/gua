@@ -1,9 +1,12 @@
 # gua
 
-[![docs: English](https://img.shields.io/badge/docs-English-blue)](README.md)
-[![docs: 繁體中文](https://img.shields.io/badge/docs-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-lightgrey)](docs/README.zh-TW.md)
-[![Go](https://img.shields.io/github/go-mod/go-version/syhlion/gua)](go.mod)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Build Status](https://drone.syhlion.tw/api/badges/syhlion/gua/status.svg)](https://drone.syhlion.tw/syhlion/gua)
+[![Stars](https://img.shields.io/github/stars/syhlion/gua.svg)](https://github.com/syhlion/gua)
+[![Go](https://img.shields.io/github/go-mod/go-version/syhlion/gua.svg)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Backed by PostgreSQL](https://img.shields.io/badge/backed%20by-PostgreSQL-336791.svg)](https://www.postgresql.org)
+[![docs English](https://img.shields.io/badge/docs-English-blue.svg)](README.md)
+[![docs 繁體中文](https://img.shields.io/badge/docs-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-lightgrey.svg)](README.zh-TW.md)
 
 Distributed crontab-style scheduler in Go, backed by **PostgreSQL** (via
 [River](https://riverqueue.com)).
@@ -22,6 +25,29 @@ execution result, recorded in a short-retention history for monitoring.
 > This is the PostgreSQL line. A Redis-backed version lives on the `harden`
 > branch; see [docs/pg-migration.md](docs/pg-migration.md) for why and how the
 > store moved to Postgres.
+
+## Architecture
+
+![architecture](docs/diagrams/gua-architecture.png)
+
+- **Register / CRUD** (consumer → gua) — `RegisterGroup`, `AddJob`, `EditJob`,
+  `PauseJob`, `ActiveJob`, `DeleteJob`, `ListJobs` over HTTP REST (`/v1/...`) or
+  the equivalent gRPC `GuaAdmin`.
+- **Delivery** (gua → consumer, when a job fires) — the trigger envelope as a
+  JSON `POST` (HTTP) or `GuaCallback.OnJobTrigger` (gRPC Push).
+- **NATS-free** — gua nodes are **stateless**: they all dequeue from one
+  Postgres with `FOR UPDATE SKIP LOCKED`, so each job runs exactly once across
+  the fleet — no slot election, no per-node buckets, no de-dup fence.
+
+Add a node and it just starts pulling; a crashed node's in-flight jobs are
+reclaimed by River's rescuer. Full write-up (pipeline, HA, schema) in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Requirements
+
+- **PostgreSQL** (the only backend) — reachable via `PG_DSN`; River runs its own
+  migrations on startup, so no manual schema step.
+- **Go** 1.x to build from source (see [go.mod](go.mod) for the version).
 
 ## Quick start (Docker Compose)
 
@@ -42,7 +68,7 @@ curl -XPOST localhost:7777/v1/add/job -d "{\"group_name\":\"demo\",\"name\":\"hi
 
 Console at <http://localhost:7777/ui>.
 
-## Usage (binary)
+## Run (binary)
 
 ```
 $ ./gua start -e env.example     # with an env file
@@ -50,27 +76,33 @@ $ ./gua start                    # or rely on the process environment
 ```
 
 Needs a reachable Postgres (`PG_DSN`); River runs its own migrations on startup.
-See [env.example](env.example) for all knobs (Postgres, history retention,
-logging + rotation).
+See [env.example](env.example) for all knobs (Postgres, history retention, logging).
 
-## Architecture
+## Ops
 
-![architecture](docs/diagrams/gua-architecture.png)
+- **Health**: `GET /version` (build/version) · web console `GET /ui`.
+- **Monitoring**: `GET /v1/status` (queue health) · `GET /v1/{group}/history`
+  (recent executions). Full reference in [docs/MONITORING.md](docs/MONITORING.md).
 
-gua nodes are **stateless**: they all dequeue from one Postgres with
-`FOR UPDATE SKIP LOCKED`, so each job runs exactly once across the fleet — no
-slot election, no per-node buckets, no de-dup fence. Add a node and it just
-starts pulling; a crashed node's in-flight jobs are reclaimed by River's
-rescuer. Full write-up (pipeline, HA, schema) in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+## Logging
+
+Output is selectable and rotated, via env:
+
+| Env | Values |
+|---|---|
+| `LOG_OUTPUT` | `stdout` (default) / `file` / `both` |
+| `LOG_FILE` | path (for `file` / `both`) |
+| `LOG_FORMAT` | `json` (default) / `text` |
+| `LOG_LEVEL` | `debug` / `info` (default) / `warn` / `error` |
+| `LOG_ROTATE_MAX_SIZE_MB` / `_MAX_BACKUPS` / `_MAX_AGE_DAYS` / `_COMPRESS` | rotation |
 
 ## Docs
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture, pipeline, HA (with diagrams)
-- [apiv1.md](docs/apiv1.md) — admin REST API
+- [docs/apiv1.md](docs/apiv1.md) — admin REST API
 - [`proto/gua.proto`](./proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
-- [docs/MONITORING.md](docs/MONITORING.md) — `/v1/status`, `/v1/{group}/history`, `/ui`, logging
-- [EVAL.md](docs/EVAL.md) — JobScheduler replacement evaluation & migration
+- [docs/MONITORING.md](docs/MONITORING.md) — `/v1/status`, `/v1/{group}/history`, `/ui`
+- [docs/EVAL.md](docs/EVAL.md) — JobScheduler replacement evaluation & migration
 
 ## Tests
 
