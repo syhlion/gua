@@ -17,7 +17,6 @@ import (
 	"github.com/riverqueue/river/rivermigrate"
 	"github.com/syhlion/gua/internal/httpclient"
 	guaproto "github.com/syhlion/gua/proto"
-	"google.golang.org/grpc"
 	"log/slog"
 	"resty.dev/v3"
 )
@@ -53,6 +52,7 @@ type guaDeliverWorker struct {
 	river.WorkerDefaults[guaJobArgs]
 	pool        *pgxpool.Pool
 	httpClient  *resty.Client
+	grpcPool    *grpcClientPool
 	machineHost string
 	machineMac  string
 	machineIp   string
@@ -103,7 +103,7 @@ func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs])
 	// River's occurrence id is stable across retries/rescues of THIS firing —
 	// hand it to the consumer as the idempotency key.
 	idemKey := strconv.FormatInt(job.ID, 10)
-	resp, derr := deliver(ctx, w.httpClient, a, idemKey)
+	resp, derr := deliver(ctx, w.httpClient, w.grpcPool, a, idemKey)
 	w.recordExecution(ctx, a, execTime, resp, derr)
 	if derr != nil {
 		w.logger.Error("river delivery error", "job", a.JobId, "error", derr)
@@ -137,7 +137,7 @@ func (w *guaDeliverWorker) Work(ctx context.Context, job *river.Job[guaJobArgs])
 
 // deliver sends the trigger envelope to the consumer and returns the result
 // message. idemKey is stable across re-deliveries of this firing.
-func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs, idemKey string) (string, error) {
+func deliver(ctx context.Context, httpClient *resty.Client, grpcPool *grpcClientPool, a guaJobArgs, idemKey string) (string, error) {
 	ss := UrlRe.FindStringSubmatch(a.RequestUrl)
 	if len(ss) == 0 {
 		return "", fmt.Errorf("invalid request_url %q", a.RequestUrl)
@@ -167,11 +167,11 @@ func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs, idemKe
 		if timeout <= 0 {
 			timeout = 5 * time.Second
 		}
-		conn, err := grpc.Dial(ss[2], grpc.WithInsecure())
+		conn, err := grpcPool.conn(ss[2])
 		if err != nil {
 			return "", err
 		}
-		defer conn.Close()
+		// conn is pooled and reused across triggers — do NOT close it here.
 		cctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		res, err := guaproto.NewGuaCallbackClient(conn).OnJobTrigger(cctx, &guaproto.JobTrigger{
@@ -196,9 +196,10 @@ func deliver(ctx context.Context, httpClient *resty.Client, a guaJobArgs, idemKe
 }
 
 type riverQuene struct {
-	pool   *pgxpool.Pool
-	client *river.Client[pgx.Tx]
-	logger *slog.Logger
+	pool     *pgxpool.Pool
+	client   *river.Client[pgx.Tx]
+	grpcPool *grpcClientPool
+	logger   *slog.Logger
 }
 
 // NewRiver builds a Postgres/River-backed Quene: runs River migrations, creates
@@ -263,9 +264,11 @@ func NewRiver(cfg *RiverConfig) (Quene, error) {
 		return nil, err
 	}
 
+	grpcPool := newGrpcClientPool()
 	work := &guaDeliverWorker{
 		pool:        pool,
 		httpClient:  httpclient.New(60*time.Second, false),
+		grpcPool:    grpcPool,
 		machineHost: cfg.MachineHost,
 		machineMac:  cfg.MachineMac,
 		machineIp:   cfg.MachineIp,
@@ -292,7 +295,7 @@ func NewRiver(cfg *RiverConfig) (Quene, error) {
 		pool.Close()
 		return nil, err
 	}
-	return &riverQuene{pool: pool, client: client, logger: cfg.Logger}, nil
+	return &riverQuene{pool: pool, client: client, grpcPool: grpcPool, logger: cfg.Logger}, nil
 }
 
 func genID() string {
@@ -307,6 +310,7 @@ func (q *riverQuene) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = q.client.Stop(ctx)
+	q.grpcPool.Close()
 	q.pool.Close()
 }
 
