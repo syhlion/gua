@@ -12,29 +12,29 @@ mTLS / gateway）保護。
 
 | Method | Path | Body | 說明 |
 |---|---|---|---|
-| POST | `/register/group` | `{"group_name":"G"}` | group 是命名空間 |
-| POST | `/remove/group` | `{"group_name":"G"}` | |
-| GET | `/group/list` | | |
-| GET | `/{group}/group/info` | | |
+| POST | `/v1/groups` | `{"group_name":"G"}` | 建立 group(命名空間) |
+| GET | `/v1/groups` | | 列出 groups |
+| GET | `/v1/groups/{group}` | | group 資訊 |
+| DELETE | `/v1/groups/{group}` | | 移除 group 及其所有 job |
 
 ## Job
 
+job 是 group 的子資源;group 與 job id 都從路徑帶。
+
 | Method | Path | Body |
 |---|---|---|
-| POST | `/add/job` | 見下 → 回傳 `job_id` |
-| POST | `/edit/job` | `{"group_name","id","request_url","payload"}` |
-| POST | `/pause/job` | `{"group_name","job_id"}` |
-| POST | `/active/job` | `{"group_name","job_id","exec_time"}` |
-| POST | `/delete/job` | `{"group_name","job_id"}` |
-| GET | `/{group}/job/list` | |
-| DELETE | `/{group}/job/clear` | |
-| DELETE | `/{group}/job/delete/{job_name}` | |
+| POST | `/v1/groups/{group}/jobs` | 見下 → 回傳 `job_id` |
+| GET | `/v1/groups/{group}/jobs` | |
+| PATCH | `/v1/groups/{group}/jobs/{job}` | `{"request_url","payload"}` |
+| POST | `/v1/groups/{group}/jobs/{job}/pause` | |
+| POST | `/v1/groups/{group}/jobs/{job}/activate` | `{"exec_time"}` |
+| DELETE | `/v1/groups/{group}/jobs/{job}` | 依 id 刪一個 job |
+| DELETE | `/v1/groups/{group}/jobs` | 清空所有 job;`?name=<job_name>` 只刪同名的 |
 
-### add/job 的 payload
+### add-job 的 payload
 
 ```json
 {
-  "group_name": "G",
   "job_id": "",                 // 可選;空字串 → server 自動產生 snowflake id
   "name": "daily-report",
   "exec_time": 1782268640,      // unix 秒,首次觸發
@@ -72,7 +72,7 @@ mTLS / gateway）保護。
 | GET | `/healthz` | liveness——進程有在服務就回 `200 ok`,不碰 DB |
 | GET | `/readyz` | readiness——Postgres 可達回 `200 ready`,否則 `503` |
 | GET | `/v1/status` | 待跑佇列深度 + 佇列健康(Postgres 無 slot) |
-| GET | `/v1/{group}/history?limit=N` | 最近執行(成功/失敗、時間) |
+| GET | `/v1/groups/{group}/history?limit=N` | 最近執行(成功/失敗、時間) |
 | GET | `/ui` | 一頁工程 console |
 
 > Kubernetes:`livenessProbe` 指 `/healthz`、`readinessProbe` 指 `/readyz`,

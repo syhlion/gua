@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/syhlion/gua/delayquene"
 	"github.com/syhlion/gua/httpv1"
 	"github.com/urfave/cli"
@@ -36,28 +35,39 @@ func Readyz(quene delayquene.Quene) http.HandlerFunc {
 	}
 }
 
-// buildRouter wires the HTTP API over a Quene.
-func buildRouter(quene delayquene.Quene) *mux.Router {
-	r := mux.NewRouter()
-	r.HandleFunc("/version", Version(version)).Methods("GET")
-	r.HandleFunc("/ui", UI()).Methods("GET")
-	r.HandleFunc("/healthz", Healthz()).Methods("GET")
-	r.HandleFunc("/readyz", Readyz(quene)).Methods("GET")
-	sub := r.PathPrefix("/v1/").Subrouter()
-	sub.HandleFunc("/status", httpv1.Status(quene)).Methods("GET")
-	sub.HandleFunc("/register/group", httpv1.RegisterGroup(quene)).Methods("POST")
-	sub.HandleFunc("/remove/group", httpv1.RemoveGroup(quene)).Methods("POST")
-	sub.HandleFunc("/add/job", httpv1.AddJob(quene)).Methods("POST")
-	sub.HandleFunc("/delete/job", httpv1.RemoveJob(quene)).Methods("POST")
-	sub.HandleFunc("/pause/job", httpv1.PauseJob(quene)).Methods("POST")
-	sub.HandleFunc("/active/job", httpv1.ActiveJob(quene)).Methods("POST")
-	sub.HandleFunc("/edit/job", httpv1.EditJob(quene)).Methods("POST")
-	sub.HandleFunc("/group/list", httpv1.GetGroupList(quene)).Methods("GET")
-	sub.HandleFunc("/{group_name}/job/list", httpv1.GetJobList(quene)).Methods("GET")
-	sub.HandleFunc("/{group_name}/group/info", httpv1.GroupInfo(quene)).Methods("GET")
-	sub.HandleFunc("/{group_name}/history", httpv1.History(quene)).Methods("GET")
-	sub.HandleFunc("/{group_name}/job/clear", httpv1.GroupJobClear(quene)).Methods(http.MethodDelete)
-	sub.HandleFunc("/{group_name}/job/delete/{job_name}", httpv1.RemoveJobsByJobName(quene)).Methods(http.MethodDelete)
+// buildRouter wires the HTTP API over a Quene using the stdlib ServeMux
+// (Go 1.22+ method + path-wildcard routing — no third-party router).
+//
+// Operational endpoints live at the root; the versioned REST API is resource
+// oriented under /v1 (groups, and jobs as a sub-resource of a group).
+func buildRouter(quene delayquene.Quene) *http.ServeMux {
+	r := http.NewServeMux()
+
+	// ops (unversioned)
+	r.HandleFunc("GET /version", Version(version))
+	r.HandleFunc("GET /ui", UI())
+	r.HandleFunc("GET /healthz", Healthz())
+	r.HandleFunc("GET /readyz", Readyz(quene))
+
+	// system
+	r.HandleFunc("GET /v1/status", httpv1.Status(quene))
+
+	// groups
+	r.HandleFunc("POST /v1/groups", httpv1.RegisterGroup(quene))
+	r.HandleFunc("GET /v1/groups", httpv1.GetGroupList(quene))
+	r.HandleFunc("GET /v1/groups/{group}", httpv1.GroupInfo(quene))
+	r.HandleFunc("DELETE /v1/groups/{group}", httpv1.RemoveGroup(quene))
+
+	// jobs (sub-resource of a group)
+	r.HandleFunc("POST /v1/groups/{group}/jobs", httpv1.AddJob(quene))
+	r.HandleFunc("GET /v1/groups/{group}/jobs", httpv1.GetJobList(quene))
+	r.HandleFunc("DELETE /v1/groups/{group}/jobs", httpv1.DeleteJobs(quene)) // ?name= filters; else clears all
+	r.HandleFunc("PATCH /v1/groups/{group}/jobs/{job}", httpv1.EditJob(quene))
+	r.HandleFunc("DELETE /v1/groups/{group}/jobs/{job}", httpv1.DeleteJob(quene))
+	r.HandleFunc("POST /v1/groups/{group}/jobs/{job}/pause", httpv1.PauseJob(quene))
+	r.HandleFunc("POST /v1/groups/{group}/jobs/{job}/activate", httpv1.ActiveJob(quene))
+	r.HandleFunc("GET /v1/groups/{group}/history", httpv1.History(quene))
+
 	return r
 }
 

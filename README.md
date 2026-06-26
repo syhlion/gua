@@ -62,12 +62,12 @@ docker compose -f docker-compose/docker-compose.yml up --build
 ```
 curl localhost:7777/version
 # 1. register a group
-curl -XPOST localhost:7777/v1/register/group -d '{"group_name":"demo"}'
+curl -XPOST localhost:7777/v1/groups -d '{"group_name":"demo"}'
 # 2. schedule a job that POSTs a trigger envelope in ~5s. Point request_url at a
 #    catcher you control (e.g. grab a URL from https://webhook.site) to watch it land:
-curl -XPOST localhost:7777/v1/add/job -d "{\"group_name\":\"demo\",\"name\":\"hi\",\"exec_time\":$(( $(date +%s) + 5 )),\"request_url\":\"HTTP@https://webhook.site/your-id\",\"interval_pattern\":\"@once\",\"payload\":\"hello\"}"
+curl -XPOST localhost:7777/v1/groups/demo/jobs -d "{\"name\":\"hi\",\"exec_time\":$(( $(date +%s) + 5 )),\"request_url\":\"HTTP@https://webhook.site/your-id\",\"interval_pattern\":\"@once\",\"payload\":\"hello\"}"
 # 3. after it fires, confirm in the execution history
-curl localhost:7777/v1/demo/history
+curl localhost:7777/v1/groups/demo/history
 ```
 
 Or open the console at <http://localhost:7777/ui> to register, schedule, and watch
@@ -86,7 +86,7 @@ See [env.example](env.example) for all knobs (Postgres, history retention, loggi
 ## Ops
 
 - **Health**: `GET /version` (build/version) · web console `GET /ui`.
-- **Monitoring**: `GET /v1/status` (queue health) · `GET /v1/{group}/history`
+- **Monitoring**: `GET /v1/status` (queue health) · `GET /v1/groups/{group}/history`
   (recent executions). Full reference in [docs/MONITORING.md](docs/MONITORING.md).
 
 ## Logging
@@ -106,7 +106,7 @@ Output is selectable and rotated, via env:
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture, pipeline, HA (with diagrams)
 - [docs/apiv1.md](docs/apiv1.md) — admin REST API
 - [`proto/gua.proto`](./proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
-- [docs/MONITORING.md](docs/MONITORING.md) — `/v1/status`, `/v1/{group}/history`, `/ui`
+- [docs/MONITORING.md](docs/MONITORING.md) — `/v1/status`, `/v1/groups/{group}/history`, `/ui`
 - [docs/EVAL.md](docs/EVAL.md) — JobScheduler replacement evaluation & migration
 
 ## Tests

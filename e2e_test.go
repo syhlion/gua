@@ -164,9 +164,8 @@ func TestE2E_DeliveryThroughPublicAPIs(t *testing.T) {
 		}))
 		defer consumer.Close()
 
-		mustPostJSON(t, rest.URL+"/v1/register/group", map[string]any{"group_name": "E2EHTTP"})
-		mustPostJSON(t, rest.URL+"/v1/add/job", map[string]any{
-			"group_name":       "E2EHTTP",
+		mustPostJSON(t, rest.URL+"/v1/groups", map[string]any{"group_name": "E2EHTTP"})
+		mustPostJSON(t, rest.URL+"/v1/groups/E2EHTTP/jobs", map[string]any{
 			"name":             "e2e-http-job",
 			"exec_time":        time.Now().Unix(),
 			"interval_pattern": "@once",

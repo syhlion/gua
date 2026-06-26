@@ -21,7 +21,7 @@ over **HTTP POST or gRPC Push**. gua nodes are stateless and scale horizontally.
   (`job_id, job_name, group_name, plan_time, exec_time, payload, idempotency_key`) is sent as a
   JSON `POST` (HTTP) or via `GuaCallback.OnJobTrigger` (gRPC Push). The
   consumer's `2xx` / `JobResult` is the execution result.
-- **Monitoring**: `GET /v1/status`, `GET /v1/{group}/history`, web console
+- **Monitoring**: `GET /v1/status`, `GET /v1/groups/{group}/history`, web console
   `GET /ui`. See [MONITORING.md](MONITORING.md).
 
 ## Pipeline
