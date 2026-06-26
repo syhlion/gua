@@ -1,5 +1,11 @@
 [unrelease]
 
+[v4.0.0]
+
+> **Breaking**: HTTP REST API redesigned to a clean resource-oriented shape under
+> `/v1` (groups/jobs as nested resources). gRPC `GuaAdmin` contract unchanged. No
+> external consumers yet — hard cutover, no aliases.
+
 [Changed / API]
 
 * **REST API redesigned to a clean resource-oriented shape** and moved off
