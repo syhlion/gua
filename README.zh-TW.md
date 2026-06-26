@@ -99,6 +99,7 @@ $ ./gua start                    # 或直接讀 process 環境變數
 
 ## 文件
 
+- [example/](example/) — **可直接跑的 demo**：設定一個 job、即時看 gua 觸發它（一行 `docker compose` 啟動）
 - [docs/ARCHITECTURE.zh-TW.md](docs/ARCHITECTURE.zh-TW.md) — 架構、pipeline、HA(含圖)
 - [docs/apiv1.zh-TW.md](docs/apiv1.zh-TW.md) — admin REST API
 - [`proto/gua.proto`](./proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
