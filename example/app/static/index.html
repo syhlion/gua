@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gua — scheduler demo</title>
+<style>
+ :root{color-scheme:dark}
+ body{font:14px/1.5 system-ui,monospace;margin:0;background:#0b0e14;color:#c9d1d9}
+ header{padding:14px 20px;border-bottom:1px solid #2d333b}
+ header h1{font-size:18px;margin:0}
+ header .sub{color:#8b949e;font-size:13px}
+ .wrap{display:flex;gap:16px;padding:20px;flex-wrap:wrap}
+ .pane{flex:1;min-width:320px;border:1px solid #2d333b;border-radius:8px;background:#0d1117}
+ .pane h2{font-size:14px;margin:0;padding:10px 14px;border-bottom:1px solid #2d333b;color:#7ee787}
+ .pane .body{padding:14px}
+ label{display:block;color:#8b949e;font-size:12px;margin:10px 0 4px}
+ input,button{font:14px system-ui;border:1px solid #2d333b;border-radius:6px;background:#161b22;color:#c9d1d9;padding:8px 10px;width:100%;box-sizing:border-box}
+ button{background:#238636;border-color:#238636;color:#fff;cursor:pointer;margin-top:14px}
+ button:hover{background:#2ea043}
+ #status{font-size:12px;color:#8b949e;margin-bottom:10px}
+ #status b.ok{color:#3fb950} #status b.bad{color:#f85149}
+ #log{list-style:none;margin:0;padding:0;max-height:50vh;overflow:auto}
+ #log li{padding:8px 10px;border:1px solid #21262d;border-radius:6px;margin-bottom:6px;background:#161b22}
+ #log li .t{color:#8b949e;font-size:11px}
+ #log li.sched{border-left:3px solid #d29922}
+ #log li.fired{border-left:3px solid #3fb950}
+ #log li .m{color:#e6edf3;font-size:15px;word-break:break-word}
+ .muted{color:#8b949e}
+</style>
+</head>
+<body>
+<header>
+ <h1>gua — distributed scheduler demo</h1>
+ <div class="sub">configure a job on the left → gua schedules it → when it fires, gua delivers it back and you see it live on the right</div>
+</header>
+<div class="wrap">
+ <section class="pane">
+  <h2>① backend — schedule a job</h2>
+  <div class="body">
+   <div class="muted">gua will fire a one-shot job after the delay and deliver the payload to this demo's webhook.</div>
+   <label>fire after (seconds)</label>
+   <input id="delay" type="number" value="5" min="0">
+   <label>payload</label>
+   <input id="payload" value="hello from gua" autocomplete="off">
+   <button onclick="schedule()">schedule</button>
+   <div id="schedstatus" class="muted" style="margin-top:10px"></div>
+  </div>
+ </section>
+ <section class="pane">
+  <h2>② frontend — live effect</h2>
+  <div class="body">
+   <div id="status">connecting…</div>
+   <ul id="log"></ul>
+  </div>
+ </section>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const ts=()=>new Date().toLocaleTimeString();
+function add(cls,html){const li=document.createElement('li');li.className=cls;li.innerHTML='<div class="t">'+ts()+'</div><div class="m">'+html+'</div>';$('log').prepend(li);}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+const es=new EventSource('/events');
+es.onopen=()=>$('status').innerHTML='event stream <b class=ok>live</b>';
+es.onerror=()=>$('status').innerHTML='event stream <b class=bad>reconnecting…</b>';
+es.onmessage=e=>{
+ let m; try{m=JSON.parse(e.data);}catch(_){return;}
+ if(m.type==='scheduled'){add('sched','⏱ <b>scheduled</b> — fires in '+m.delay+'s · payload: <code>'+esc(m.payload)+'</code>');}
+ else if(m.type==='fired'){add('fired','🔥 <b>FIRED</b> — gua delivered payload: <code>'+esc(m.payload)+'</code> <span class=muted>(job '+esc(m.job_id)+')</span>');}
+};
+
+async function schedule(){
+ const delay=parseInt($('delay').value||'0',10), payload=$('payload').value;
+ $('schedstatus').textContent='scheduling…';
+ const r=await fetch('/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({delay,payload})});
+ $('schedstatus').textContent=r.ok?('scheduled ✓ — watch the right pane in '+delay+'s'):('failed: '+(await r.text()));
+}
+</script>
+</body>
+</html>

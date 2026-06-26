@@ -1,0 +1,46 @@
+# gua scheduler demo — postgres + gua + a tiny demo backend.
+# Run from the repo root:
+#   docker compose -f example/docker-compose.yml up --build
+# then open http://localhost:8080
+#
+# Configure a job in the browser → the demo backend schedules it in gua → when it
+# fires, gua delivers it to the demo's webhook, which streams it back to the page.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: gua
+      POSTGRES_DB: gua
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gua"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  gua:
+    build: ..
+    command: start
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GRPC_LISTEN: ":6666"
+      HTTP_LISTEN: ":7777"
+      MACHINE_CODE: gua-demo
+      PG_DSN: "postgres://postgres:gua@postgres:5432/gua?sslmode=disable"
+      LOG_OUTPUT: stdout
+      LOG_FORMAT: json
+      LOG_LEVEL: info
+
+  demo:
+    build:
+      context: ./app
+    environment:
+      GUA_URL: "http://gua:7777"
+      HOOK_URL: "http://demo:8080/hook" # gua delivers fired jobs here (compose network)
+      LISTEN: ":8080"
+    ports:
+      - "8080:8080" # the demo UI
+    depends_on:
+      - gua
