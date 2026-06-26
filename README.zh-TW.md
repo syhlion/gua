@@ -5,6 +5,7 @@
 [![Go](https://img.shields.io/github/go-mod/go-version/syhlion/gua.svg)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Backed by PostgreSQL](https://img.shields.io/badge/backed%20by-PostgreSQL-336791.svg)](https://www.postgresql.org)
+[![Docker](https://img.shields.io/docker/v/syhlion/gua?sort=semver&logo=docker&logoColor=white&label=docker)](https://hub.docker.com/r/syhlion/gua)
 [![docs English](https://img.shields.io/badge/docs-English-lightgrey.svg)](README.md)
 [![docs 繁體中文](https://img.shields.io/badge/docs-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-blue.svg)](README.zh-TW.md)
 
@@ -78,6 +79,25 @@ $ ./gua start                    # 或直接讀 process 環境變數
 
 需要一顆可連的 Postgres(`PG_DSN`);River 開機時會自己跑 migration。所有設定
 (Postgres、歷史保留、logging)見 [env.example](env.example)。
+
+## 容器映像（Docker Hub）
+
+repo 內的 `docker-compose.yml` 與 `example/` 都是**從原始碼建**(開發 / demo 用)。
+若要**不自己 build、直接部署**,從 Docker Hub 拉發佈好的 image——
+[**syhlion/gua**](https://hub.docker.com/r/syhlion/gua),每個 release 都有 tag
+(`:4.0.0` / `:4` / `:latest`):
+
+```sh
+docker pull syhlion/gua:latest
+# 給它一顆可連的 Postgres;開機會自己跑 migration:
+docker run --rm -p 7777:7777 -p 6666:6666 \
+  -e PG_DSN='postgres://user:pass@your-postgres:5432/gua?sslmode=disable' \
+  -e HTTP_LISTEN=:7777 -e GRPC_LISTEN=:6666 -e MACHINE_CODE=gua-1 \
+  syhlion/gua:latest start
+```
+
+想在自己的 compose 裡「拉 image 而非 build」,把 `build:` 區塊換成
+`image: syhlion/gua:<tag>` 即可。
 
 ## 維運
 
