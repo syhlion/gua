@@ -5,6 +5,7 @@
 [![Go](https://img.shields.io/github/go-mod/go-version/syhlion/gua.svg)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Backed by PostgreSQL](https://img.shields.io/badge/backed%20by-PostgreSQL-336791.svg)](https://www.postgresql.org)
+[![Docker](https://img.shields.io/docker/v/syhlion/gua?sort=semver&logo=docker&logoColor=white&label=docker)](https://hub.docker.com/r/syhlion/gua)
 [![docs English](https://img.shields.io/badge/docs-English-blue.svg)](README.md)
 [![docs 繁體中文](https://img.shields.io/badge/docs-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87-lightgrey.svg)](README.zh-TW.md)
 
@@ -82,6 +83,25 @@ $ ./gua start                    # or rely on the process environment
 
 Needs a reachable Postgres (`PG_DSN`); River runs its own migrations on startup.
 See [env.example](env.example) for all knobs (Postgres, history retention, logging).
+
+## Container image
+
+The repo's `docker-compose.yml` and `example/` **build from source** (for dev /
+the demo). To deploy without building, pull the published image from Docker Hub —
+[**syhlion/gua**](https://hub.docker.com/r/syhlion/gua), tagged per release
+(`:4.0.0` / `:4` / `:latest`):
+
+```sh
+docker pull syhlion/gua:latest
+# give it a reachable Postgres; it runs its own migrations on startup:
+docker run --rm -p 7777:7777 -p 6666:6666 \
+  -e PG_DSN='postgres://user:pass@your-postgres:5432/gua?sslmode=disable' \
+  -e HTTP_LISTEN=:7777 -e GRPC_LISTEN=:6666 -e MACHINE_CODE=gua-1 \
+  syhlion/gua:latest start
+```
+
+To pull instead of build in your own compose, swap the `build:` block for
+`image: syhlion/gua:<tag>`.
 
 ## Ops
 
