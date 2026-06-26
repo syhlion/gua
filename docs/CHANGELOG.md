@@ -7,6 +7,15 @@
   "job not lost" acceptance item from the Postgres migration. Gated by
   `GUA_PG_DSN`; runs in CI against `postgres:16`.
 
+[Changed / hardened]
+
+* gRPC delivery now **reuses a pooled `*grpc.ClientConn` per target** instead of
+  dialling and tearing down a connection on every trigger. Recurring jobs hitting
+  the same consumer no longer pay a TCP+HTTP/2 handshake each fire. Also replaces
+  the deprecated `grpc.Dial`/`grpc.WithInsecure` with `grpc.NewClient`/
+  `insecure.NewCredentials`, and adds client + server keepalive so pooled idle
+  connections survive NAT/LB paths and dead peers are detected.
+
 [Docs]
 
 * recorded the decision to keep durable self-rescheduling (next occurrence as a

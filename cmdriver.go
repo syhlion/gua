@@ -17,6 +17,7 @@ import (
 	guaproto "github.com/syhlion/gua/proto"
 	"github.com/urfave/cli"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -67,7 +68,20 @@ func startRiver(c *cli.Context) {
 	if err != nil {
 		logFatal(logger, "startup error", "error", err)
 	}
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		// Keep idle delivery connections (now pooled & long-lived on the gua
+		// side) alive through NAT/LB paths, and detect dead peers.
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    60 * time.Second,
+			Timeout: 20 * time.Second,
+		}),
+		// Don't drop clients that ping while idle — the delivery pool keeps
+		// connections without an active stream between triggers.
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             20 * time.Second,
+			PermitWithoutStream: true,
+		}),
+	)
 	guaproto.RegisterGuaAdminServer(grpcServer, &GuaAdmin{quene: quene})
 	reflection.Register(grpcServer)
 
