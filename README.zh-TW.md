@@ -59,12 +59,12 @@ docker compose -f docker-compose/docker-compose.yml up --build
 ```
 curl localhost:7777/version
 # 1. 註冊 group
-curl -XPOST localhost:7777/v1/register/group -d '{"group_name":"demo"}'
+curl -XPOST localhost:7777/v1/groups -d '{"group_name":"demo"}'
 # 2. 排一個約 5 秒後 POST 出 trigger 信封的 job。把 request_url 指到你自己的接收端
 #    (例如去 https://webhook.site 拿一個 URL)就能看到信封送達:
-curl -XPOST localhost:7777/v1/add/job -d "{\"group_name\":\"demo\",\"name\":\"hi\",\"exec_time\":$(( $(date +%s) + 5 )),\"request_url\":\"HTTP@https://webhook.site/your-id\",\"interval_pattern\":\"@once\",\"payload\":\"hello\"}"
+curl -XPOST localhost:7777/v1/groups/demo/jobs -d "{\"name\":\"hi\",\"exec_time\":$(( $(date +%s) + 5 )),\"request_url\":\"HTTP@https://webhook.site/your-id\",\"interval_pattern\":\"@once\",\"payload\":\"hello\"}"
 # 3. 觸發後,從執行歷史確認
-curl localhost:7777/v1/demo/history
+curl localhost:7777/v1/groups/demo/history
 ```
 
 或開 console <http://localhost:7777/ui>,直接在介面註冊、排程並即時看歷史。
@@ -82,7 +82,7 @@ $ ./gua start                    # 或直接讀 process 環境變數
 ## 維運
 
 - **健康檢查**:`GET /version`(build/版本)· web console `GET /ui`。
-- **監控**:`GET /v1/status`(佇列健康)· `GET /v1/{group}/history`(近期執行)。
+- **監控**:`GET /v1/status`(佇列健康)· `GET /v1/groups/{group}/history`(近期執行)。
   完整參照見 [docs/MONITORING.zh-TW.md](docs/MONITORING.zh-TW.md)。
 
 ## 日誌
@@ -102,7 +102,7 @@ $ ./gua start                    # 或直接讀 process 環境變數
 - [docs/ARCHITECTURE.zh-TW.md](docs/ARCHITECTURE.zh-TW.md) — 架構、pipeline、HA(含圖)
 - [docs/apiv1.zh-TW.md](docs/apiv1.zh-TW.md) — admin REST API
 - [`proto/gua.proto`](./proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
-- [docs/MONITORING.zh-TW.md](docs/MONITORING.zh-TW.md) — `/v1/status`、`/v1/{group}/history`、`/ui`
+- [docs/MONITORING.zh-TW.md](docs/MONITORING.zh-TW.md) — `/v1/status`、`/v1/groups/{group}/history`、`/ui`
 - [docs/EVAL.zh-TW.md](docs/EVAL.zh-TW.md) — 取代 JobScheduler 的評估與遷移
 
 ## 測試

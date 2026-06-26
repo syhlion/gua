@@ -13,29 +13,29 @@ The same operations are available over gRPC via the `GuaAdmin` service
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| POST | `/register/group` | `{"group_name":"G"}` | group is a namespace |
-| POST | `/remove/group` | `{"group_name":"G"}` | |
-| GET | `/group/list` | | |
-| GET | `/{group}/group/info` | | |
+| POST | `/v1/groups` | `{"group_name":"G"}` | create a group (a namespace) |
+| GET | `/v1/groups` | | list groups |
+| GET | `/v1/groups/{group}` | | group info |
+| DELETE | `/v1/groups/{group}` | | remove the group and all its jobs |
 
 ## Jobs
 
+Jobs are a sub-resource of a group; the group and job id come from the path.
+
 | Method | Path | Body |
 |---|---|---|
-| POST | `/add/job` | see below → returns `job_id` |
-| POST | `/edit/job` | `{"group_name","id","request_url","payload"}` |
-| POST | `/pause/job` | `{"group_name","job_id"}` |
-| POST | `/active/job` | `{"group_name","job_id","exec_time"}` |
-| POST | `/delete/job` | `{"group_name","job_id"}` |
-| GET | `/{group}/job/list` | |
-| DELETE | `/{group}/job/clear` | |
-| DELETE | `/{group}/job/delete/{job_name}` | |
+| POST | `/v1/groups/{group}/jobs` | see below → returns `job_id` |
+| GET | `/v1/groups/{group}/jobs` | |
+| PATCH | `/v1/groups/{group}/jobs/{job}` | `{"request_url","payload"}` |
+| POST | `/v1/groups/{group}/jobs/{job}/pause` | |
+| POST | `/v1/groups/{group}/jobs/{job}/activate` | `{"exec_time"}` |
+| DELETE | `/v1/groups/{group}/jobs/{job}` | delete one job by id |
+| DELETE | `/v1/groups/{group}/jobs` | clear all jobs; `?name=<job_name>` deletes only matching jobs |
 
-### add/job payload
+### add-job payload
 
 ```json
 {
-  "group_name": "G",
   "job_id": "",                 // optional; empty -> server generates a snowflake
   "name": "daily-report",
   "exec_time": 1782268640,      // unix seconds, first fire
@@ -75,7 +75,7 @@ per attempt). Equivalent fallback: `job_id` + `plan_time`.
 | GET | `/healthz` | liveness — `200 ok` while the process serves; does not touch the DB |
 | GET | `/readyz` | readiness — `200 ready` when Postgres is reachable, `503` otherwise |
 | GET | `/v1/status` | pending-queue depth + queue health (no slots on Postgres) |
-| GET | `/v1/{group}/history?limit=N` | recent executions (success/fail, timings) |
+| GET | `/v1/groups/{group}/history?limit=N` | recent executions (success/fail, timings) |
 | GET | `/ui` | single-page engineering console |
 
 > For Kubernetes: point `livenessProbe` at `/healthz` and `readinessProbe` at

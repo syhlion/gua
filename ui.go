@@ -42,12 +42,12 @@ async function load(){
     ['alive',x=>x.alive?'<span class=ok>yes</span>':'<span class=bad>no</span>']]);
  }catch(e){document.getElementById('status').innerHTML='<span class=bad>'+esc(e.message)+'</span>';}
  if(!g){document.getElementById('jobs').innerHTML='<div class=muted>enter a group</div>';document.getElementById('hist').innerHTML='';return;}
- try{const jobs=await j('/v1/'+encodeURIComponent(g)+'/job/list');
+ try{const jobs=await j('/v1/groups/'+encodeURIComponent(g)+'/jobs');
   document.getElementById('jobs').innerHTML=table(jobs,[['id',x=>esc(x.id)],['name',x=>esc(x.name)],
    ['next_exec',x=>ts(x.exec_time)],['interval',x=>esc(x.interval_pattern)],['url',x=>esc(x.request_url)],
    ['active',x=>x.active?'<span class=ok>on</span>':'<span class=muted>paused</span>']]);
  }catch(e){document.getElementById('jobs').innerHTML='<span class=bad>'+esc(e.message)+'</span>';}
- try{const h=await j('/v1/'+encodeURIComponent(g)+'/history?limit=100');
+ try{const h=await j('/v1/groups/'+encodeURIComponent(g)+'/history?limit=100');
   document.getElementById('hist').innerHTML=table(h,[['job_id',x=>esc(x.job_id)],['type',x=>esc(x.type)],
    ['exec',x=>ts(x.exec_time)],['finish',x=>ts(x.finish_time)],
    ['result',x=>x.success?'<span class=ok>ok</span>':'<span class=bad>fail</span>'],

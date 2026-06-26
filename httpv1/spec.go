@@ -1,13 +1,13 @@
 package httpv1
 
+// EditJobPayload is the PATCH body for a job; group + job id come from the path.
 type EditJobPayload struct {
-	GroupName  string `json:"group_name"`
-	Id         string `json:"id"`
 	RequestUrl string `json:"request_url"`
 	Payload    string `json:"payload"`
 }
+
+// AddJobPayload is the POST body for a new job; the group comes from the path.
 type AddJobPayload struct {
-	GroupName       string `json:"group_name"`
 	JobId           string `json:"job_id"`
 	Name            string `json:"name"`
 	Exectime        int64  `json:"exec_time"`
@@ -17,22 +17,14 @@ type AddJobPayload struct {
 	Timeout         int64  `json:"timeout"`
 	Memo            string `json:"memo"`
 }
+
 type RegisterGroupPayload struct {
 	GroupName string `json:"group_name"`
 }
 
-type JobControlPayload struct {
-	GroupName string `json:"group_name"`
-	JobId     string `json:"job_id"`
-}
+// ActiveJobPayload is the activate body; group + job id come from the path.
 type ActiveJobPayload struct {
-	GroupName string `json:"group_name"`
-	JobId     string `json:"job_id"`
-	Exectime  int64  `json:"exec_time"`
-}
-
-type GetJobsPayload struct {
-	GroupName string `json:"group_name"`
+	Exectime int64 `json:"exec_time"`
 }
 
 type ResponseJobList struct {

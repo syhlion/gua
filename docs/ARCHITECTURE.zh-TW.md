@@ -20,7 +20,7 @@ gua 是一套分散式、crontab 風格的排程器,後端為 PostgreSQL(透過
   (`job_id, job_name, group_name, plan_time, exec_time, payload, idempotency_key`)以 JSON `POST`
   (HTTP)或 `GuaCallback.OnJobTrigger`(gRPC Push)送出。消費者的 `2xx` /
   `JobResult` 即執行結果。
-- **監控**:`GET /v1/status`、`GET /v1/{group}/history`、Web console `GET /ui`。
+- **監控**:`GET /v1/status`、`GET /v1/groups/{group}/history`、Web console `GET /ui`。
   見 [MONITORING.zh-TW.md](MONITORING.zh-TW.md)。
 
 ## Pipeline

@@ -23,7 +23,7 @@ Read-only snapshot.
 | `down_server_backlog` | always 0 — no per-node buckets on Postgres |
 | `servers[]` | always empty — gua nodes are stateless, no slot election (kept for API shape) |
 
-## `GET /v1/{group}/history?limit=N` — execution history
+## `GET /v1/groups/{group}/history?limit=N` — execution history
 
 Recent executions for a group, newest first (`limit` default 100, max 1000).
 
@@ -54,8 +54,8 @@ Recent executions for a group, newest first (`limit` default 100, max 1000).
 ## `GET /ui` — engineering console
 
 A single self-contained HTML page (no build step, no auth). Enter a group name
-and it polls `/v1/status`, `/v1/{group}/job/list`, and
-`/v1/{group}/history` — cluster health, scheduled jobs, and recent executions —
+and it polls `/v1/status`, `/v1/groups/{group}/jobs`, and
+`/v1/groups/{group}/history` — cluster health, scheduled jobs, and recent executions —
 with an optional 3s auto-refresh. It is a probe + API-validation surface for
 RD/ops, not an end-user product.
 

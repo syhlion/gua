@@ -23,7 +23,7 @@
 | `down_server_backlog` | 恆為 0 —— Postgres 上沒有 per-node bucket |
 | `servers[]` | 恆為空 —— gua 節點無狀態、無 slot 選舉(為了 API 形狀保留) |
 
-## `GET /v1/{group}/history?limit=N` — 執行歷史
+## `GET /v1/groups/{group}/history?limit=N` — 執行歷史
 
 某 group 最近的執行紀錄,由新到舊(`limit` 預設 100,上限 1000)。
 
@@ -54,7 +54,7 @@
 ## `GET /ui` — 工程 console
 
 一頁自包含 HTML(免 build、免認證)。輸入 group 名,它會輪詢
-`/v1/status`、`/v1/{group}/job/list`、`/v1/{group}/history` —— 叢集健康、已排程
+`/v1/status`、`/v1/groups/{group}/jobs`、`/v1/groups/{group}/history` —— 叢集健康、已排程
 job、最近執行 —— 並可選 3 秒自動刷新。定位是 RD/ops 的排查 + API 驗證台,不是給
 end user 的產品。
 

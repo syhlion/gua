@@ -35,7 +35,7 @@ layer is provided by the database and **deleted wholesale**.
 | **lost-job patch** | `JOB-*-scan` checkpoints + `JobCheck` | `bucket.go` |
 | **failover** | `down-server` `LPUSH` + `ZUNIONSTORE` bucket merge | `bucket.go` |
 | **slot election + fencing** | `SERVER-N` / `OWN-SERVER-N` + heartbeat CAS + `OnSupersede` | `quene.go` |
-| monitoring | `/v1/status`, `/v1/{group}/history` (`GUA-HIST` ZSET TTL), `/ui` | `quene.go` / `history.go` |
+| monitoring | `/v1/status`, `/v1/groups/{group}/history` (`GUA-HIST` ZSET TTL), `/ui` | `quene.go` / `history.go` |
 
 River replaces **all bold rows**: SKIP LOCKED dequeue (no fence, no locks, no
 per-server buckets), built-in retry/backoff, periodic jobs (cron), a **rescuer**
@@ -129,7 +129,7 @@ Branch `pg-store` off `harden`; docker Postgres up; River + driver chosen
   0 disables). `History` reads it newest-first.
 - [x] `Stats`: `ready_queue_depth` = count of pending River occurrences; the
   slot/`servers[]` section is empty (no slots on PG).
-- [x] `/ui`, `/v1/status`, `/v1/{group}/history` work unchanged over the River
+- [x] `/ui`, `/v1/status`, `/v1/groups/{group}/history` work unchanged over the River
   backend (same handlers, same `Quene` interface).
 
 ### Phase 5 — delete compensation code + drop Redis ✅ done

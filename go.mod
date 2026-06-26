@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/gorilla/handlers v1.5.1
-	github.com/gorilla/mux v1.8.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
 	github.com/json-iterator/go v1.1.12

@@ -1,5 +1,20 @@
 [unrelease]
 
+[Changed / API]
+
+* **REST API redesigned to a clean resource-oriented shape** and moved off
+  `gorilla/mux` to the stdlib `net/http.ServeMux` (Go 1.22+ method routing; one
+  fewer dependency). Groups and jobs are now nested resources with the
+  identifier in the path and the HTTP verb carrying the action — e.g.
+  `POST /v1/groups`, `POST /v1/groups/{group}/jobs`,
+  `PATCH /v1/groups/{group}/jobs/{job}`,
+  `POST /v1/groups/{group}/jobs/{job}/pause|activate`,
+  `DELETE /v1/groups/{group}/jobs/{job}`,
+  `DELETE /v1/groups/{group}/jobs?name=` (clear all / by name),
+  `GET /v1/groups/{group}/history`. Replaces the old verb-in-path routes
+  (`/v1/add/job`, `/v1/register/group`, `/v1/{group}/job/list`, …). **Breaking**;
+  the gRPC `GuaAdmin` contract is unchanged.
+
 [Added]
 
 * `TestRiverRescuer`: crash-mid-process acceptance test — a worker that dies with
