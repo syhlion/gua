@@ -1,7 +1,7 @@
 # gua
 
-[![Build Status](https://drone.syhlion.tw/api/badges/syhlion/gua/status.svg)](https://drone.syhlion.tw/syhlion/gua)
 [![Stars](https://img.shields.io/github/stars/syhlion/gua.svg)](https://github.com/syhlion/gua)
+[![Build Status](https://drone.syhlion.tw/api/badges/syhlion/gua/status.svg)](https://drone.syhlion.tw/syhlion/gua)
 [![Go](https://img.shields.io/github/go-mod/go-version/syhlion/gua.svg)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Backed by PostgreSQL](https://img.shields.io/badge/backed%20by-PostgreSQL-336791.svg)](https://www.postgresql.org)
@@ -51,22 +51,27 @@ reclaimed by River's rescuer. Full write-up (pipeline, HA, schema) in
 
 ## Quick start (Docker Compose)
 
-Brings up Postgres + gua (River runs its own migrations on startup):
+Brings up Postgres + gua (River runs its own migrations on startup) — no setup:
 
 ```
 docker compose -f docker-compose/docker-compose.yml up --build
 ```
 
-Then:
+**See it work** — register a group, schedule a one-shot job ~5s out, then watch it fire:
 
 ```
 curl localhost:7777/version
-# register a group and schedule a job that fires in 5s:
+# 1. register a group
 curl -XPOST localhost:7777/v1/register/group -d '{"group_name":"demo"}'
-curl -XPOST localhost:7777/v1/add/job -d "{\"group_name\":\"demo\",\"name\":\"hi\",\"exec_time\":$(( $(date +%s) + 5 )),\"request_url\":\"HTTP@https://example.com/hook\",\"interval_pattern\":\"@once\",\"payload\":\"hello\"}"
+# 2. schedule a job that POSTs a trigger envelope in ~5s. Point request_url at a
+#    catcher you control (e.g. grab a URL from https://webhook.site) to watch it land:
+curl -XPOST localhost:7777/v1/add/job -d "{\"group_name\":\"demo\",\"name\":\"hi\",\"exec_time\":$(( $(date +%s) + 5 )),\"request_url\":\"HTTP@https://webhook.site/your-id\",\"interval_pattern\":\"@once\",\"payload\":\"hello\"}"
+# 3. after it fires, confirm in the execution history
+curl localhost:7777/v1/demo/history
 ```
 
-Console at <http://localhost:7777/ui>.
+Or open the console at <http://localhost:7777/ui> to register, schedule, and watch
+history live.
 
 ## Run (binary)
 
