@@ -103,6 +103,7 @@ Output is selectable and rotated, via env:
 
 ## Docs
 
+- [example/](example/) — **runnable demo**: configure a job, watch gua fire it live (one `docker compose` command)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture, pipeline, HA (with diagrams)
 - [docs/apiv1.md](docs/apiv1.md) — admin REST API
 - [`proto/gua.proto`](./proto/gua.proto) — gRPC `GuaAdmin` + `GuaCallback`
