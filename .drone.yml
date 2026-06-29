@@ -25,16 +25,18 @@ services:
 
 steps:
   - name: test
-    image: golang:1.25-alpine
+    # Debian image (glibc + gcc) so `go test -race` works — the race detector
+    # needs cgo and is unreliable on alpine/musl.
+    image: golang:1.25
     environment:
-      CGO_ENABLED: "0"
+      CGO_ENABLED: "1" # required by the race detector (prod image stays CGO=0)
       GUA_PG_DSN: postgres://gua:gua@database:5432/gua?sslmode=disable
     commands:
-      - apk add --no-cache git postgresql-client
+      - apt-get update && apt-get install -y --no-install-recommends postgresql-client
       - until pg_isready -h database -U gua -d gua; do echo "waiting for postgres"; sleep 1; done
       - go build ./...
       - go vet ./...
-      - go test ./...
+      - go test -race ./...
 
   # Build and push the runtime image. Releases (git tags + GitHub Release notes)
   # are cut manually with the gh CLI, so there is no auto github-release step

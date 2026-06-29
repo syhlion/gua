@@ -7,7 +7,7 @@ ENV CGO_ENABLED=0
 ARG VERSION
 RUN apk add --no-cache git make
 ADD ./ /go/src/gua
-RUN cd /go/src/gua && go build -mod vendor -ldflags "-X main.version=${VERSION}" -o /gua
+RUN cd /go/src/gua && go build -mod vendor -ldflags "-X main.name=gua -X main.version=${VERSION}" -o /gua
 
 # final stage
 FROM alpine:3.20
