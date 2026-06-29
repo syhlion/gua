@@ -45,6 +45,8 @@ steps:
       repo: syhlion/gua
       auto_tag: true
       purge: true
+      build_args:
+        - VERSION=${DRONE_SEMVER}
       username:
         from_secret: docker_account
       password:
