@@ -1,4 +1,4 @@
-[unrelease]
+[v5.0.1]
 
 [CI]
 
@@ -6,7 +6,8 @@
   (`.github/workflows/ci.yml`): build / vet / golangci-lint / `go test -race`
   against a Postgres 16 service on every push and PR; on `v*` tags the runtime
   image is built and pushed to Docker Hub (`X.Y.Z`, `X.Y`, `X`, `latest`).
-  Deleted `.drone.yml`; README badge points at the workflow.
+  Deleted `.drone.yml`; README badge points at the workflow. The Docker Hub
+  credentials are read from the repo's `dockerhub` environment.
 
 [v5.0.0]
 

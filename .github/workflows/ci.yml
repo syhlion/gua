@@ -5,7 +5,8 @@
 #           suites skip without GUA_PG_DSN, so the service is what makes them run).
 #   docker  tags only, after test passes: build the runtime image and push it
 #           to Docker Hub as <major>.<minor>.<patch>, <major>.<minor>, <major>
-#           and latest. Needs the DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets.
+#           and latest. Needs the DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets
+#           of the `dockerhub` environment.
 #
 # Releases (git tag + GitHub Release notes) are still cut by hand with `gh`.
 name: ci
@@ -52,6 +53,8 @@ jobs:
   docker:
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
+    # the DOCKERHUB_* secrets live on this environment (Settings → Environments)
+    environment: dockerhub
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

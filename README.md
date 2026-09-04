@@ -89,7 +89,7 @@ See [env.example](env.example) for all knobs (Postgres, history retention, loggi
 The repo's `docker-compose.yml` and `example/` **build from source** (for dev /
 the demo). To deploy without building, pull the published image from Docker Hub —
 [**syhlion/gua**](https://hub.docker.com/r/syhlion/gua), tagged per release
-(`:5.0.0` / `:5` / `:latest`):
+(`:5.0.1` / `:5` / `:latest`):
 
 ```sh
 docker pull syhlion/gua:latest
