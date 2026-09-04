@@ -85,7 +85,7 @@ $ ./gua start                    # 或直接讀 process 環境變數
 repo 內的 `docker-compose.yml` 與 `example/` 都是**從原始碼建**(開發 / demo 用)。
 若要**不自己 build、直接部署**,從 Docker Hub 拉發佈好的 image——
 [**syhlion/gua**](https://hub.docker.com/r/syhlion/gua),每個 release 都有 tag
-(`:4.0.0` / `:4` / `:latest`):
+(`:5.0.0` / `:5` / `:latest`):
 
 ```sh
 docker pull syhlion/gua:latest

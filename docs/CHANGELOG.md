@@ -1,8 +1,15 @@
 [unrelease]
 
+[v5.0.0]
+
 > Full-code review 2026-09-04 (`docs/REVIEW-2026-09-04.md`): six confirmed
 > logic bugs fixed, validation unified across REST/gRPC, and the per-delivery
 > hot path trimmed. REST/gRPC surfaces are unchanged in shape except where noted.
+
+[Security]
+
+* bump grpc 1.81.1 → 1.83.1 (Dependabot high: HTTP/2 DATA-frame OOM, xDS RBAC /
+  HTTP/2 issues) and golang.org/x/net 0.51.0 → 0.55.0 (medium: HTML parser DoS).
 
 [Fixed]
 
