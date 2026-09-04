@@ -92,7 +92,7 @@ docker pull syhlion/gua:latest
 # 給它一顆可連的 Postgres;開機會自己跑 migration:
 docker run --rm -p 7777:7777 -p 6666:6666 \
   -e PG_DSN='postgres://user:pass@your-postgres:5432/gua?sslmode=disable' \
-  -e HTTP_LISTEN=:7777 -e GRPC_LISTEN=:6666 -e MACHINE_CODE=gua-1 \
+  -e HTTP_LISTEN=:7777 -e GRPC_LISTEN=:6666 \
   syhlion/gua:latest start
 ```
 
@@ -129,7 +129,7 @@ docker run --rm -p 7777:7777 -p 6666:6666 \
 ## 測試
 
 ```
-go test ./...                                          # 單元測試(cron parser)
+go test ./...                                          # 單元測試（cron parser、REST handler）不需要 Postgres
 # 整合 / 壓測需要 Postgres:
 GUA_PG_DSN='postgres://user:pass@host:5432/db?sslmode=disable' go test ./delayquene/ -run TestRiver
 GUA_STRESS=1 GUA_STRESS_N=2000 GUA_PG_DSN=... go test ./delayquene/ -run TestRiverStress -v

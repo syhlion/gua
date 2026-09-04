@@ -1,388 +1,329 @@
+// Package httpv1 is gua's admin REST API (resource oriented, under /v1).
+//
+// Every handler is a thin adapter over delayquene.Quene: it parses the request,
+// calls the queue, and maps the queue's sentinel errors to HTTP statuses
+// (ErrInvalid → 400, ErrNotFound → 404, ErrDuplicate → 409, anything else →
+// 500). Responses are JSON: {"success": ...} on 200, {"error": ...} otherwise.
 package httpv1
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"errors"
+	"io"
+	"log/slog"
 	"net/http"
-	"regexp"
 	"strconv"
-	"strings"
 
-	"fmt"
 	"github.com/syhlion/gua/delayquene"
 	guaproto "github.com/syhlion/gua/proto"
-	"github.com/syhlion/restresp"
-	"log/slog"
 )
 
-var (
-	logger  *slog.Logger
-	jobRe   = regexp.MustCompile(`^([a-zA-Z0-9_]+)$`)
-	groupRe = regexp.MustCompile(`^([a-zA-Z0-9_]+)$`)
-)
+// maxBodyBytes bounds a request body (payloads are stored in Postgres).
+const maxBodyBytes = 1 << 20 // 1 MiB
 
+var logger = slog.Default()
+
+// SetLogger replaces the package logger (defaults to slog.Default()).
 func SetLogger(l *slog.Logger) {
-	logger = l
-}
-
-func Version(serverVersion string) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		restresp.Write(w, serverVersion, http.StatusOK)
+	if l != nil {
+		logger = l
 	}
 }
 
-// Status is a read-only monitoring endpoint: pending-queue depth and queue
-// health (no slots on the Postgres backend).
-func Status(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+// WriteJSON writes the API's JSON envelope: {"success": data} for 200,
+// {"error": data} for any other status.
+func WriteJSON(w http.ResponseWriter, data any, status int) {
+	w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+	w.WriteHeader(status)
+	var body any
+	if status == http.StatusOK {
+		body = struct {
+			Success any `json:"success"`
+		}{data}
+	} else {
+		body = struct {
+			Error any `json:"error"`
+		}{data}
+	}
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		logger.Warn("write response", "error", err)
+	}
+}
+
+// writeErr maps a Quene error to a status and writes it. Internal errors are
+// logged and hidden behind a generic message.
+func writeErr(w http.ResponseWriter, op string, err error) {
+	switch {
+	case errors.Is(err, delayquene.ErrInvalid):
+		WriteJSON(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, delayquene.ErrNotFound):
+		WriteJSON(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, delayquene.ErrDuplicate):
+		WriteJSON(w, err.Error(), http.StatusConflict)
+	default:
+		logger.Error(op, "error", err)
+		WriteJSON(w, "internal error", http.StatusInternalServerError)
+	}
+}
+
+// readJSON decodes a bounded JSON body into dst. An empty body leaves dst
+// untouched. It writes the error response and returns false on failure.
+func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
+	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			WriteJSON(w, "body too large", http.StatusRequestEntityTooLarge)
+			return false
+		}
+		WriteJSON(w, "read body: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	if len(body) == 0 {
+		return true
+	}
+	if err := json.Unmarshal(body, dst); err != nil {
+		WriteJSON(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// Version reports the build version. GET /version
+func Version(serverVersion string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		WriteJSON(w, serverVersion, http.StatusOK)
+	}
+}
+
+// Status is a read-only monitoring snapshot. GET /v1/status
+func Status(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s, err := quene.Stats()
 		if err != nil {
-			logger.Warn(fmt.Sprintf("status error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusInternalServerError)
+			writeErr(w, "status", err)
 			return
 		}
-		restresp.Write(w, s, http.StatusOK)
+		WriteJSON(w, s, http.StatusOK)
 	}
 }
 
-// History returns recent execution records for a group (Monitor Tier 2).
-// GET /v1/groups/{group}/history
-func History(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+// History returns recent execution records for a group.
+// GET /v1/groups/{group}/history?limit=N
+func History(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
 		limit := 100
 		if v := r.URL.Query().Get("limit"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil {
-				limit = n
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				WriteJSON(w, "limit must be an integer", http.StatusBadRequest)
+				return
 			}
+			limit = n
 		}
-		entries, err := quene.History(groupName, limit)
+		entries, err := quene.History(r.PathValue("group"), limit)
 		if err != nil {
-			logger.Warn(fmt.Sprintf("history error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusInternalServerError)
+			writeErr(w, "history", err)
 			return
 		}
-		restresp.Write(w, entries, http.StatusOK)
+		WriteJSON(w, entries, http.StatusOK)
 	}
 }
 
-// GroupInfo returns a single group's metadata. GET /v1/groups/{group}
-func GroupInfo(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+// GroupInfo returns a single group's name. GET /v1/groups/{group}
+func GroupInfo(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		group, err := quene.GroupInfo(groupName)
+		group, err := quene.GroupInfo(r.PathValue("group"))
 		if err != nil {
-			logger.Warn(fmt.Sprintf("group info error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, "group info", err)
 			return
 		}
-		restresp.Write(w, group, http.StatusOK)
+		WriteJSON(w, group, http.StatusOK)
 	}
 }
 
 // GetGroupList lists all groups. GET /v1/groups
-func GetGroupList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+func GetGroupList(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		groups, err := quene.QueryGroups()
 		if err != nil {
-			logger.Warn(fmt.Sprintf("get group list error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, "list groups", err)
 			return
 		}
-		list := make([]string, 0)
-		for _, v := range groups {
-			s := strings.TrimPrefix(v, "USER_")
-			list = append(list, s)
-		}
-		restresp.Write(w, list, http.StatusOK)
+		WriteJSON(w, groups, http.StatusOK)
 	}
 }
 
 // GetJobList lists a group's jobs. GET /v1/groups/{group}/jobs
-func GetJobList(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+func GetJobList(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		jobs, err := quene.List(groupName)
+		jobs, err := quene.List(r.PathValue("group"))
 		if err != nil {
-			logger.Warn(fmt.Sprintf("jobs error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, "list jobs", err)
 			return
 		}
-		joblist := make([]*ResponseJobList, 0)
+		list := make([]*ResponseJobList, 0, len(jobs))
 		for _, v := range jobs {
-			job := &ResponseJobList{
+			list = append(list, &ResponseJobList{
 				Name:            v.Name,
 				Id:              v.Id,
 				Exectime:        v.Exectime,
 				IntervalPattern: v.IntervalPattern,
 				RequestUrl:      v.RequestUrl,
 				Payload:         v.Payload,
+				Timeout:         v.Timeout,
 				GroupName:       v.GroupName,
 				Active:          v.Active,
 				Memo:            v.Memo,
-			}
-			joblist = append(joblist, job)
+			})
 		}
-		restresp.Write(w, joblist, http.StatusOK)
+		WriteJSON(w, list, http.StatusOK)
 	}
 }
 
 // RegisterGroup creates a group. POST /v1/groups  body: {group_name}
-func RegisterGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+func RegisterGroup(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		var p RegisterGroupPayload
+		if !readJSON(w, r, &p) {
 			return
 		}
-		payload := &RegisterGroupPayload{}
-		err = json.Unmarshal(body, payload)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		if err := quene.RegisterGroup(p.GroupName); err != nil {
+			writeErr(w, "register group", err)
 			return
 		}
-		if !groupRe.MatchString(payload.GroupName) {
-			restresp.Write(w, "groupname illegal", http.StatusBadRequest)
-			return
-		}
-		if len([]rune(payload.GroupName)) > 22 {
-			restresp.Write(w, "groupname too long", http.StatusBadRequest)
-			return
-		}
-		err = quene.RegisterGroup(payload.GroupName)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("RegisterGroup Error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		restresp.Write(w, payload.GroupName, http.StatusOK)
+		logger.Info("group registered", "group", p.GroupName)
+		WriteJSON(w, p.GroupName, http.StatusOK)
 	}
 }
 
-// EditJob updates a job's request_url/payload.
-// PATCH /v1/groups/{group}/jobs/{job}  body: {request_url, payload}
-func EditJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+// RemoveGroup deletes a group and all its jobs. DELETE /v1/groups/{group}
+func RemoveGroup(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		jobID := r.PathValue("job")
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		group := r.PathValue("group")
+		if err := quene.RemoveGroup(group); err != nil {
+			writeErr(w, "remove group", err)
 			return
 		}
-		payload := &EditJobPayload{}
-		err = json.Unmarshal(body, payload)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if payload.RequestUrl == "" {
-			restresp.Write(w, "payload no request_url", http.StatusBadRequest)
-			return
-		}
-		err = quene.Edit(groupName, jobID, payload.RequestUrl, payload.Payload)
-		if err != nil {
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		restresp.Write(w, jobID, http.StatusOK)
+		logger.Info("group removed", "group", group)
+		WriteJSON(w, "ok", http.StatusOK)
 	}
 }
 
 // AddJob schedules a job in a group.
 // POST /v1/groups/{group}/jobs  body: {name, exec_time, interval_pattern, request_url, ...}
-func AddJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+func AddJob(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		group := r.PathValue("group")
+		var p AddJobPayload
+		if !readJSON(w, r, &p) {
 			return
 		}
-		payload := &AddJobPayload{}
-		err = json.Unmarshal(body, payload)
-		var jobId string
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if payload.Name == "" {
-			restresp.Write(w, "payload no name", http.StatusBadRequest)
-			return
-		}
-		if payload.Exectime < 0 {
-			restresp.Write(w, "payload exec_time error", http.StatusBadRequest)
-			return
-		}
-		if payload.IntervalPattern == "" {
-			restresp.Write(w, "payload no interval_pattern", http.StatusBadRequest)
-			return
-		}
-		if payload.RequestUrl == "" {
-			restresp.Write(w, "payload no request_url", http.StatusBadRequest)
-			return
-		}
-		exists, err := quene.ExistsGroup(groupName)
-		if err != nil {
-			restresp.Write(w, "exists group err", http.StatusBadRequest)
-			return
-		}
-		if exists != 1 {
-			restresp.Write(w, "no group", http.StatusBadRequest)
-			return
-		}
-		if payload.JobId == "" {
-			jobId = quene.GenerateUID()
-		} else {
-			jobId = payload.JobId
-		}
-		if !jobRe.MatchString(jobId) {
-			restresp.Write(w, "jobid illegal", http.StatusBadRequest)
-			return
-		}
-		if len([]rune(jobId)) > 22 {
-			restresp.Write(w, "jobid too long", http.StatusBadRequest)
-			return
+		jobID := p.JobId
+		if jobID == "" {
+			jobID = quene.GenerateUID()
 		}
 		job := &guaproto.Job{
-			Name:            payload.Name,
-			GroupName:       groupName,
-			Id:              jobId,
-			Exectime:        payload.Exectime,
-			Timeout:         payload.Timeout,
-			IntervalPattern: payload.IntervalPattern,
-			RequestUrl:      payload.RequestUrl,
-			Payload:         payload.Payload,
+			Name:            p.Name,
+			GroupName:       group,
+			Id:              jobID,
+			Exectime:        p.Exectime,
+			Timeout:         p.Timeout,
+			IntervalPattern: p.IntervalPattern,
+			RequestUrl:      p.RequestUrl,
+			Payload:         p.Payload,
 			Active:          true,
-			Memo:            payload.Memo,
+			Memo:            p.Memo,
 		}
-		err = quene.Push(job)
-		if err != nil {
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		if err := quene.Push(job); err != nil {
+			writeErr(w, "add job", err)
 			return
 		}
-		logger.Info(fmt.Sprintf("success add job: %v, origin payload: %v", job, payload))
-		restresp.Write(w, job.Id, http.StatusOK)
+		logger.Info("job added", "group", group, "job", jobID, "name", p.Name,
+			"interval", job.IntervalPattern, "exec_time", job.Exectime)
+		WriteJSON(w, jobID, http.StatusOK)
 	}
 }
 
-// DeleteJob removes a single job by id.
-// DELETE /v1/groups/{group}/jobs/{job}
-func DeleteJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+// EditJob updates a job's request_url/payload.
+// PATCH /v1/groups/{group}/jobs/{job}  body: {request_url, payload}
+func EditJob(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		jobID := r.PathValue("job")
-		if err := quene.Delete(groupName, jobID); err != nil {
-			logger.Warn(fmt.Sprintf("jobs error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		group, jobID := r.PathValue("group"), r.PathValue("job")
+		var p EditJobPayload
+		if !readJSON(w, r, &p) {
 			return
 		}
-		logger.Info(fmt.Sprintf("success remove job: group=%s id=%s", groupName, jobID))
-		restresp.Write(w, "ok", http.StatusOK)
+		if p.RequestUrl == "" {
+			WriteJSON(w, "request_url is required", http.StatusBadRequest)
+			return
+		}
+		if err := quene.Edit(group, jobID, p.RequestUrl, p.Payload); err != nil {
+			writeErr(w, "edit job", err)
+			return
+		}
+		logger.Info("job edited", "group", group, "job", jobID)
+		WriteJSON(w, jobID, http.StatusOK)
+	}
+}
+
+// DeleteJob removes a single job by id. DELETE /v1/groups/{group}/jobs/{job}
+func DeleteJob(quene delayquene.Quene) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		group, jobID := r.PathValue("group"), r.PathValue("job")
+		if err := quene.Delete(group, jobID); err != nil {
+			writeErr(w, "delete job", err)
+			return
+		}
+		logger.Info("job deleted", "group", group, "job", jobID)
+		WriteJSON(w, "ok", http.StatusOK)
 	}
 }
 
 // DeleteJobs clears a group's jobs. DELETE /v1/groups/{group}/jobs
-// With ?name=<job_name> it deletes only jobs matching that name; otherwise it
-// clears every job in the group.
-func DeleteJobs(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+// With ?name=<job_name> it deletes only jobs with that name. Returns the
+// number of jobs deleted.
+func DeleteJobs(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		filterName := r.URL.Query().Get("name")
-		jobs, err := quene.List(groupName)
+		group := r.PathValue("group")
+		name := r.URL.Query().Get("name")
+		n, err := quene.DeleteJobs(group, name)
 		if err != nil {
-			logger.Warn(fmt.Sprintf("list jobs error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+			writeErr(w, "delete jobs", err)
 			return
 		}
-		for _, v := range jobs {
-			if filterName != "" && v.Name != filterName {
-				continue
-			}
-			if err = quene.Delete(groupName, v.Id); err != nil {
-				logger.Warn(fmt.Sprintf("delete jobs error: %v", err))
-				restresp.Write(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		}
-		restresp.Write(w, "ok", http.StatusOK)
+		logger.Info("jobs deleted", "group", group, "name", name, "count", n)
+		WriteJSON(w, n, http.StatusOK)
 	}
 }
 
 // PauseJob pauses a job. POST /v1/groups/{group}/jobs/{job}/pause
-func PauseJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+func PauseJob(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		jobID := r.PathValue("job")
-		if err := quene.Pause(groupName, jobID); err != nil {
-			logger.Warn(fmt.Sprintf("jobs error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		group, jobID := r.PathValue("group"), r.PathValue("job")
+		if err := quene.Pause(group, jobID); err != nil {
+			writeErr(w, "pause job", err)
 			return
 		}
-		logger.Info(fmt.Sprintf("success pause job: group=%s id=%s", groupName, jobID))
-		restresp.Write(w, "ok", http.StatusOK)
+		logger.Info("job paused", "group", group, "job", jobID)
+		WriteJSON(w, "ok", http.StatusOK)
 	}
 }
 
 // ActiveJob (re)activates a job. POST /v1/groups/{group}/jobs/{job}/activate
-// body: {exec_time}
-func ActiveJob(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
+// body: {exec_time}  (omitted or 0 = now)
+func ActiveJob(quene delayquene.Quene) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		jobID := r.PathValue("job")
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Error reading body: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		group, jobID := r.PathValue("group"), r.PathValue("job")
+		var p ActiveJobPayload
+		if !readJSON(w, r, &p) {
 			return
 		}
-		payload := &ActiveJobPayload{}
-		if len(body) > 0 {
-			if err = json.Unmarshal(body, payload); err != nil {
-				logger.Warn(fmt.Sprintf("Error json umnarsal: %v", err))
-				restresp.Write(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		}
-		if err = quene.Active(groupName, jobID, payload.Exectime); err != nil {
-			logger.Warn(fmt.Sprintf("jobs error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
+		if err := quene.Active(group, jobID, p.Exectime); err != nil {
+			writeErr(w, "activate job", err)
 			return
 		}
-		logger.Info(fmt.Sprintf("success active job: group=%s id=%s", groupName, jobID))
-		restresp.Write(w, "ok", http.StatusOK)
-	}
-}
-
-// RemoveGroup deletes a group and all its jobs. DELETE /v1/groups/{group}
-func RemoveGroup(quene delayquene.Quene) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		groupName := r.PathValue("group")
-		// clear this group's jobs first
-		jobs, err := quene.List(groupName)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("RemoveGroup list jobs error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		for _, v := range jobs {
-			if err = quene.Delete(groupName, v.Id); err != nil {
-				logger.Warn(fmt.Sprintf("RemoveGroup delete job error: %v", err))
-				restresp.Write(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		}
-		if err = quene.RemoveGroup(groupName); err != nil {
-			logger.Warn(fmt.Sprintf("RemoveGroup Error: %v", err))
-			restresp.Write(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		restresp.Write(w, "ok", http.StatusOK)
+		logger.Info("job activated", "group", group, "job", jobID, "exec_time", p.Exectime)
+		WriteJSON(w, "ok", http.StatusOK)
 	}
 }

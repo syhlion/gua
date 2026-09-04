@@ -44,7 +44,7 @@ func buildRouter(quene delayquene.Quene) *http.ServeMux {
 	r := http.NewServeMux()
 
 	// ops (unversioned)
-	r.HandleFunc("GET /version", Version(version))
+	r.HandleFunc("GET /version", httpv1.Version(version))
 	r.HandleFunc("GET /ui", UI())
 	r.HandleFunc("GET /healthz", Healthz())
 	r.HandleFunc("GET /readyz", Readyz(quene))

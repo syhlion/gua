@@ -68,7 +68,7 @@ func TestRiverSmoke(t *testing.T) {
 	if err := client.Start(ctx); err != nil {
 		t.Fatalf("river start: %v", err)
 	}
-	defer client.Stop(ctx)
+	defer func() { _ = client.Stop(ctx) }()
 
 	if _, err := client.Insert(ctx, smokeArgs{Msg: "hi"}, &river.InsertOpts{
 		ScheduledAt: time.Now().Add(1 * time.Second),

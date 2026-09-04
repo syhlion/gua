@@ -96,7 +96,7 @@ docker pull syhlion/gua:latest
 # give it a reachable Postgres; it runs its own migrations on startup:
 docker run --rm -p 7777:7777 -p 6666:6666 \
   -e PG_DSN='postgres://user:pass@your-postgres:5432/gua?sslmode=disable' \
-  -e HTTP_LISTEN=:7777 -e GRPC_LISTEN=:6666 -e MACHINE_CODE=gua-1 \
+  -e HTTP_LISTEN=:7777 -e GRPC_LISTEN=:6666 \
   syhlion/gua:latest start
 ```
 
@@ -133,7 +133,7 @@ Output is selectable and rotated, via env:
 ## Tests
 
 ```
-go test ./...                                          # unit (cron parser)
+go test ./...                                          # unit (cron parser, REST handlers) — no Postgres needed
 # integration / stress need Postgres:
 GUA_PG_DSN='postgres://user:pass@host:5432/db?sslmode=disable' go test ./delayquene/ -run TestRiver
 GUA_STRESS=1 GUA_STRESS_N=2000 GUA_PG_DSN=... go test ./delayquene/ -run TestRiverStress -v

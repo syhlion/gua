@@ -16,6 +16,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
@@ -23,6 +24,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,7 +33,9 @@ import (
 	"github.com/syhlion/gua/httpv1"
 	guaproto "github.com/syhlion/gua/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
@@ -75,7 +79,7 @@ func newE2EQuene(t *testing.T) delayquene.Quene {
 		t.Fatalf("rewrite dsn: %v", err)
 	}
 	q, err := delayquene.NewRiver(&delayquene.RiverConfig{
-		DSN: dsn, MachineHost: "e2e", MachineIp: "127.0.0.1", MachineMac: "e2e",
+		DSN: dsn, MachineHost: "e2e",
 		HistoryTTL: 3600,
 		Logger:     discardLogger(),
 	})
@@ -114,7 +118,7 @@ func mustPostJSON(t *testing.T, target string, body any) {
 	if err != nil {
 		t.Fatalf("POST %s: %v", target, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		rb, _ := io.ReadAll(resp.Body)
 		t.Fatalf("POST %s -> %d: %s", target, resp.StatusCode, rb)
@@ -145,7 +149,7 @@ func TestE2E_DeliveryThroughPublicAPIs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("/readyz = %d, want 200", resp.StatusCode)
 		}
@@ -202,7 +206,7 @@ func TestE2E_DeliveryThroughPublicAPIs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		admin := guaproto.NewGuaAdminClient(conn)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -232,6 +236,62 @@ func TestE2E_DeliveryThroughPublicAPIs(t *testing.T) {
 			}
 		case <-time.After(25 * time.Second):
 			t.Fatal("no gRPC delivery within 25s")
+		}
+	})
+
+	t.Run("REST error statuses", func(t *testing.T) {
+		post := func(path, body string) (int, string) {
+			resp, err := http.Post(rest.URL+path, "application/json", strings.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			rb, _ := io.ReadAll(resp.Body)
+			return resp.StatusCode, string(rb)
+		}
+		if code, body := post("/v1/groups/E2EHTTP/jobs", `{"name":"x","interval_pattern":"* * *","request_url":"HTTP@http://x"}`); code != 400 || !strings.Contains(body, "interval_pattern") {
+			t.Fatalf("bad pattern: %d %s", code, body)
+		}
+		if code, _ := post("/v1/groups/NOPE/jobs", `{"name":"x","interval_pattern":"@once","request_url":"HTTP@http://x"}`); code != 404 {
+			t.Fatalf("unknown group: %d", code)
+		}
+		if code, _ := post("/v1/groups", `{"group_name":"E2EHTTP"}`); code != 409 {
+			t.Fatalf("duplicate group: %d", code)
+		}
+		resp, err := http.Get(rest.URL + "/v1/groups/NOPE")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != 404 {
+			t.Fatalf("unknown group info: %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("gRPC error codes", func(t *testing.T) {
+		conn, err := grpc.NewClient(adminLis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = conn.Close() }()
+		admin := guaproto.NewGuaAdminClient(conn)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, err = admin.AddJob(ctx, &guaproto.AddJobRequest{GroupName: "NOPE", Name: "x", IntervalPattern: "@once", Target: "http://x"})
+		if status.Code(err) != codes.NotFound {
+			t.Fatalf("unknown group: %v", err)
+		}
+		_, err = admin.AddJob(ctx, &guaproto.AddJobRequest{GroupName: "E2EGRPC", Name: "x", IntervalPattern: "@once"})
+		if status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("empty target: %v", err)
+		}
+		_, err = admin.RegisterGroup(ctx, &guaproto.GroupRequest{GroupName: "E2EGRPC"})
+		if status.Code(err) != codes.AlreadyExists {
+			t.Fatalf("duplicate group: %v", err)
+		}
+		_, err = admin.PauseJob(ctx, &guaproto.JobRef{GroupName: "E2EGRPC", JobId: "nope"})
+		if status.Code(err) != codes.NotFound {
+			t.Fatalf("unknown job: %v", err)
 		}
 	})
 }

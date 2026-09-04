@@ -78,7 +78,7 @@ func handleSchedule(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "schedule failed: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	rb, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		http.Error(w, "gua rejected: "+string(rb), http.StatusBadGateway)
@@ -86,7 +86,7 @@ func handleSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	sse.broadcast(map[string]any{"type": "scheduled", "payload": in.Payload, "delay": in.Delay, "at": execTime})
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(rb) // gua returns the job id
+	_, _ = w.Write(rb) // gua returns the job id
 }
 
 // handleHook is the consumer endpoint gua POSTs to when a job fires.
@@ -99,7 +99,7 @@ func handleHook(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&env)
 	sse.broadcast(map[string]any{"type": "fired", "payload": env.Payload, "job_id": env.JobId, "at": env.ExecTime})
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	_, _ = w.Write([]byte("ok"))
 }
 
 // handleEvents is the browser's SSE stream.
@@ -114,12 +114,12 @@ func handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	ch := sse.sub()
 	defer sse.unsub(ch)
-	fmt.Fprintf(w, "data: %s\n\n", `{"type":"ready"}`)
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", `{"type":"ready"}`)
 	flusher.Flush()
 	for {
 		select {
 		case msg := <-ch:
-			fmt.Fprintf(w, "data: %s\n\n", msg)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", msg)
 			flusher.Flush()
 		case <-r.Context().Done():
 			return
@@ -131,7 +131,7 @@ func ensureGroup() {
 	body, _ := json.Marshal(map[string]any{"group_name": group})
 	resp, err := http.Post(guaURL+"/v1/groups", "application/json", bytes.NewReader(body))
 	if err == nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 }
 

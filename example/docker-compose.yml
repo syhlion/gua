@@ -27,7 +27,6 @@ services:
     environment:
       GRPC_LISTEN: ":6666"
       HTTP_LISTEN: ":7777"
-      MACHINE_CODE: gua-demo
       PG_DSN: "postgres://postgres:gua@postgres:5432/gua?sslmode=disable"
       LOG_OUTPUT: stdout
       LOG_FORMAT: json

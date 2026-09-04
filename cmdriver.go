@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -22,12 +21,19 @@ import (
 )
 
 // startRiver runs gua against the Postgres/River backend.
-// It needs only GRPC_LISTEN, HTTP_LISTEN and PG_DSN — no Redis envs.
+//
+// Required env: GRPC_LISTEN, HTTP_LISTEN, PG_DSN. Optional tuning:
+//
+//	GUA_HISTORY_TTL        execution-history retention, seconds (default 5 days; 0 = off)
+//	GUA_MAX_WORKERS        per-node delivery concurrency (default 50)
+//	GUA_MAX_ATTEMPTS       deliveries per firing before the job is paused (default 25)
+//	GUA_DELIVERY_TIMEOUT   default per-delivery timeout, seconds, for jobs with timeout 0 (default 30)
+//	TZ                     time zone used to evaluate cron patterns (default: the host's, UTC in the image)
 func startRiver(c *cli.Context) {
 	if c.String("env-file") != "" {
 		if err := godotenv.Load(c.String("env-file")); err != nil {
 			// logger not built yet (it may read LOG_* from the env file)
-			os.Stderr.WriteString("load env-file failed: " + err.Error() + "\n")
+			_, _ = os.Stderr.WriteString("load env-file failed: " + err.Error() + "\n")
 			os.Exit(1)
 		}
 	}
@@ -39,23 +45,16 @@ func startRiver(c *cli.Context) {
 	if grpcListen == "" || httpListen == "" || dsn == "" {
 		logFatal(logger, "river backend requires GRPC_LISTEN, HTTP_LISTEN and PG_DSN")
 	}
-	host, _ := GetHostname()
-	ip, _ := GetExternalIP()
-	mac, _ := GetMacAddr()
+	host, _ := os.Hostname()
 
-	historyTTL := 5 * 24 * 3600
-	if v := os.Getenv("GUA_HISTORY_TTL"); v != "" {
-		if n, perr := strconv.Atoi(v); perr == nil {
-			historyTTL = n
-		}
-	}
 	quene, err := delayquene.NewRiver(&delayquene.RiverConfig{
-		DSN:         dsn,
-		MachineHost: host,
-		MachineIp:   ip,
-		MachineMac:  mac,
-		HistoryTTL:  historyTTL,
-		Logger:      logger,
+		DSN:             dsn,
+		MachineHost:     host,
+		HistoryTTL:      envInt("GUA_HISTORY_TTL", 5*24*3600),
+		MaxWorkers:      envInt("GUA_MAX_WORKERS", 0),
+		MaxAttempts:     envInt("GUA_MAX_ATTEMPTS", 0),
+		DeliveryTimeout: time.Duration(envInt("GUA_DELIVERY_TIMEOUT", 0)) * time.Second,
+		Logger:          logger,
 	})
 	if err != nil {
 		logFatal(logger, "startup error", "error", err)
@@ -104,7 +103,8 @@ func startRiver(c *cli.Context) {
 	go func() { httpErr <- server.Serve(httpListener) }()
 	go func() { grpcErr <- grpcServer.Serve(apiListener) }()
 
-	logger.Info("gua started", "backend", "river/postgres", "grpc", grpcListen, "http", httpListen)
+	logger.Info("gua started", "version", version, "compiled", compileDate,
+		"backend", "river/postgres", "grpc", grpcListen, "http", httpListen, "tz", time.Local.String())
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	select {
@@ -118,12 +118,23 @@ func startRiver(c *cli.Context) {
 
 	// Graceful drain: stop accepting new admin requests and let in-flight ones
 	// finish, then the deferred quene.Close() stops River workers (10s drain of
-	// in-flight deliveries) and closes the pool last, since both the HTTP
-	// handlers and River use it.
+	// in-flight deliveries, then cancel) and closes the pool last, since both
+	// the HTTP handlers and River use it.
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutCtx); err != nil {
 		logger.Warn("http graceful shutdown", "error", err)
 	}
-	grpcServer.GracefulStop()
+	// GracefulStop has no deadline of its own: force-stop if a stream hangs on.
+	stopped := make(chan struct{})
+	go func() {
+		grpcServer.GracefulStop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-shutCtx.Done():
+		logger.Warn("grpc graceful stop timed out, forcing")
+		grpcServer.Stop()
+	}
 }

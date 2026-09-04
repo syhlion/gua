@@ -21,14 +21,14 @@ const uiHTML = `<!doctype html>
 <div id="bar">group: <input id="grp" placeholder="group name" size="16">
  <button onclick="load()">load</button>
  <button onclick="toggle()">auto-refresh: <span id="ar">off</span></button></div>
-<h2>cluster / queue</h2><div id="status"></div>
+<h2>queue</h2><div id="status"></div>
 <h2>jobs</h2><div id="jobs"></div>
 <h2>recent executions</h2><div id="hist"></div>
 <script>
 let timer=null;
 const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const ts=u=>u?new Date(u*1000).toISOString().replace('T',' ').replace('.000Z',''):'-';
-async function j(u){const r=await fetch(u);if(!r.ok)throw new Error(u+' '+r.status);return r.json();}
+async function j(u){const r=await fetch(u);const b=await r.json();if(!r.ok)throw new Error(u+' '+r.status+' '+(b&&b.error||''));return b.success;}
 function table(rows,cols){if(!rows||!rows.length)return '<div class="muted">(none)</div>';
  let h='<table><tr>'+cols.map(c=>'<th>'+c[0]+'</th>').join('')+'</tr>';
  for(const x of rows)h+='<tr>'+cols.map(c=>'<td>'+c[1](x)+'</td>').join('')+'</tr>';return h+'</table>';}
@@ -36,10 +36,10 @@ async function load(){
  const g=document.getElementById('grp').value.trim();
  try{document.getElementById('ver').textContent=await j('/version');}catch(e){}
  try{const s=await j('/v1/status');
-  document.getElementById('status').innerHTML=
-   '<div>ready_queue_depth: <b>'+s.ready_queue_depth+'</b> &nbsp; down_server_backlog: <b>'+s.down_server_backlog+'</b></div>'+
-   table(s.servers,[['slot',x=>esc(x.name)],['last_heartbeat',x=>ts(x.last_heartbeat)],
-    ['alive',x=>x.alive?'<span class=ok>yes</span>':'<span class=bad>no</span>']]);
+  document.getElementById('status').innerHTML=table([s],[
+   ['pending',x=>x.ready_queue_depth],['running',x=>x.running],
+   ['retryable',x=>x.retryable?'<span class=bad>'+x.retryable+'</span>':'0'],
+   ['jobs active',x=>x.jobs_active],['jobs paused',x=>x.jobs_paused],['now',x=>ts(x.now)]]);
  }catch(e){document.getElementById('status').innerHTML='<span class=bad>'+esc(e.message)+'</span>';}
  if(!g){document.getElementById('jobs').innerHTML='<div class=muted>enter a group</div>';document.getElementById('hist').innerHTML='';return;}
  try{const jobs=await j('/v1/groups/'+encodeURIComponent(g)+'/jobs');
@@ -59,9 +59,9 @@ function toggle(){if(timer){clearInterval(timer);timer=null;document.getElementB
 load();
 </script></body></html>`
 
-func UI() func(w http.ResponseWriter, r *http.Request) {
+func UI() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(uiHTML))
+		_, _ = w.Write([]byte(uiHTML))
 	}
 }

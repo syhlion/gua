@@ -15,7 +15,7 @@ message GroupRequest {
 
 message AddJobRequest {
   string group_name = 1;
-  string job_id = 2;            // empty => gua generates a snowflake id
+  string job_id = 2;            // empty => gua generates a random 16-hex-char id
   string name = 3;
   int64 exec_time = 4;          // unix seconds, first fire
   string interval_pattern = 5;  // "@once" | cron | "@every 1h"

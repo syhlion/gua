@@ -1,10 +1,9 @@
-// Package httpclient builds the team-default resty client and a tiny adapter
-// that keeps greq's (data, status, err) call shape, so call sites barely change.
-//
-// Replaces github.com/syhlion/greq + requestwork.v2 (archived 2026-06-24).
+// Package httpclient builds the resty client used for HTTP deliveries and a
+// tiny (data, status, err) adapter around it.
 package httpclient
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -16,45 +15,36 @@ import (
 // connections to one consumer.
 const maxConnsPerHost = 100
 
-// New returns a configured resty client. Configuration only — no HTTP logic.
-func New(timeout time.Duration, debug bool) *resty.Client {
+// New returns a configured resty client. maxTimeout is the hard cap on any
+// request; the per-delivery timeout comes from the context passed to PostRaw.
+//
+// No resty-level retry is configured: resty never retries a POST (non
+// idempotent) and River already retries a failed delivery with backoff.
+func New(maxTimeout time.Duration, debug bool) *resty.Client {
 	transport := &http.Transport{
 		MaxConnsPerHost:     maxConnsPerHost,
 		MaxIdleConns:        maxConnsPerHost,
 		MaxIdleConnsPerHost: maxConnsPerHost,
 		IdleConnTimeout:     90 * time.Second,
-		// keep-alive stays on (greq used to disable it)
 	}
 	c := resty.New().
-		SetTimeout(timeout).
+		SetTimeout(maxTimeout).
 		SetTransport(transport).
-		SetRetryCount(3). // greq had none; retries network failures (not 5xx)
-		SetRetryWaitTime(200 * time.Millisecond).
-		SetRetryMaxWaitTime(2 * time.Second).
-		SetResponseBodyLimit(8 << 20) // 8MiB cap; greq read unbounded (OOM risk)
+		SetResponseBodyLimit(8 << 20) // 8MiB cap on what we read back
 	if debug {
 		c.SetDebug(true)
 	}
 	return c
 }
 
-// PostRaw posts body as application/json and returns (data, status, err),
-// matching greq.Client.PostRaw. body is a []byte so resty can buffer/retry it
-// natively (passing an io.Reader would defeat retry and add a copy).
-func PostRaw(c *resty.Client, url string, body []byte) ([]byte, int, error) {
+// PostRaw posts body as application/json and returns (data, status, err). The
+// request is bound to ctx, so the caller's deadline/cancellation applies.
+func PostRaw(ctx context.Context, c *resty.Client, url string, body []byte) ([]byte, int, error) {
 	r, err := c.R().
+		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetBody(body).
 		Post(url)
-	if err != nil {
-		return nil, 0, err
-	}
-	return r.Bytes(), r.StatusCode(), nil
-}
-
-// Get returns (data, status, err), matching greq.Client.Get.
-func Get(c *resty.Client, url string) ([]byte, int, error) {
-	r, err := c.R().Get(url)
 	if err != nil {
 		return nil, 0, err
 	}

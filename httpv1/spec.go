@@ -27,6 +27,9 @@ type ActiveJobPayload struct {
 	Exectime int64 `json:"exec_time"`
 }
 
+// ResponseJobList is one job as returned by GET /v1/groups/{group}/jobs.
+// exec_time is the next scheduled fire (updated after every run of a
+// recurring job).
 type ResponseJobList struct {
 	Name            string `json:"name"`
 	Id              string `json:"id"`
@@ -34,6 +37,7 @@ type ResponseJobList struct {
 	IntervalPattern string `json:"interval_pattern"`
 	RequestUrl      string `json:"request_url"`
 	Payload         string `json:"payload"`
+	Timeout         int64  `json:"timeout"`
 	GroupName       string `json:"group_name"`
 	Active          bool   `json:"active"`
 	Memo            string `json:"memo"`

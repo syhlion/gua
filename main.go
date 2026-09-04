@@ -1,21 +1,22 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
-	"log/slog"
 )
 
-var json = jsoniter.ConfigCompatibleWithStandardLibrary
-
+// Build metadata, stamped by the Makefile / Dockerfile via -ldflags -X.
 var (
 	version     string
 	compileDate string
-	name        string
-	cmdStart    = cli.Command{
+	name        = "gua"
+)
+
+var (
+	cmdStart = cli.Command{
 		Name:    "start",
 		Usage:   "start gua server",
 		Aliases: []string{"st"},
@@ -46,5 +47,8 @@ func main() {
 	gua.Commands = []cli.Command{
 		cmdStart,
 	}
-	gua.Run(os.Args)
+	if err := gua.Run(os.Args); err != nil {
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
+		os.Exit(1)
+	}
 }

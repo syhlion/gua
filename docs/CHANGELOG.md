@@ -1,5 +1,81 @@
 [unrelease]
 
+> Full-code review 2026-09-04 (`docs/REVIEW-2026-09-04.md`): six confirmed
+> logic bugs fixed, validation unified across REST/gRPC, and the per-delivery
+> hot path trimmed. REST/gRPC surfaces are unchanged in shape except where noted.
+
+[Fixed]
+
+* **Edit now takes effect on the already-scheduled occurrence** (and on `@once`
+  jobs at all). The River occurrence used to snapshot `request_url`/`payload`;
+  the worker now loads the definition from `gua_jobs` at fire time and the
+  occurrence carries only `job_id`/`group_name`/`plan_time`.
+* **Active no longer double-fires**: re-activating an active job replaces its
+  pending occurrence instead of adding a second one, and it 404s (instead of
+  scheduling) when the job belongs to a different group.
+* **5-field cron patterns are read as classic crontab** (`minute hour dom month
+  dow`, seconds = 0). They used to be parsed as `sec min hour dom month` with
+  `dow` optional, so the documented `*/5 * * * *` fired every 5 **seconds**.
+  6-field patterns keep the leading seconds field; any other count is rejected.
+* `interval_pattern` is validated on AddJob — a bad pattern was stored, fired
+  once, then silently stopped recurring while still listed as active.
+* `HTTP@` / `GRPC@` with an empty target is rejected (the matcher allowed it;
+  every delivery then failed and was retried 25 times).
+* gRPC `RemoveGroup` cascades like the REST one — it left the group's jobs
+  alive and firing.
+* Jobs whose delivery attempts are exhausted are **paused** (`active=false`,
+  visible in the job list / status) instead of lingering as active-but-dead.
+* The job list's `exec_time` is the **next** fire for recurring jobs (it was
+  frozen at the first fire).
+* AddJob is transactional (definition + occurrence); `activate` / `exec_time`
+  `0` means now instead of 1970.
+* `timeout` applies to HTTP deliveries too (it was gRPC-only): 0 = server
+  default (`GUA_DELIVERY_TIMEOUT`, 30s), capped at 10 minutes. Shutdown drains
+  in-flight deliveries for 10s, then cancels them (River `SoftStopTimeout`).
+
+[Changed / API]
+
+* REST error statuses: 400 invalid input, **404** unknown group/job, **409**
+  duplicate, **413** body over 1 MiB, **500** storage error (message hidden,
+  logged). Everything used to be 400. gRPC maps the same errors to
+  `INVALID_ARGUMENT` / `NOT_FOUND` / `ALREADY_EXISTS` / `INTERNAL`.
+* `DELETE /v1/groups/{group}/jobs` returns the number of jobs deleted.
+* Job list entries include `timeout`.
+* `GET /v1/status`: dropped the always-empty `down_server_backlog` / `servers`
+  (Redis-era); added `running`, `retryable`, `jobs_active`, `jobs_paused`.
+* Validation (names `[A-Za-z0-9_]` ≤ 22, pattern, target, exec_time, timeout)
+  lives in the queue layer and applies to gRPC as well as REST.
+* New env: `GUA_MAX_WORKERS`, `GUA_MAX_ATTEMPTS`, `GUA_DELIVERY_TIMEOUT`; `TZ`
+  documented (cron patterns are evaluated in the server's zone). `MACHINE_CODE`
+  removed (was never read).
+
+[Performance]
+
+* History pruning moved off the delivery path into a River periodic job (every
+  10 min, once per cluster) and `gua_executions(created_at)` is indexed — the
+  per-delivery `DELETE` was a sequential scan.
+* Pending occurrences are matched with `args @> {...}` (River's GIN index)
+  instead of `args->>'job_id'`, which scanned every pending row on each
+  Pause/Delete.
+* `DELETE .../jobs` and group removal are single statements instead of
+  list-then-delete-each.
+
+[Tests]
+
+* `go test ./...` without Postgres now covers the cron parser (5/6-field
+  semantics, validation) and every REST handler via a fake queue.
+* Postgres suite adds: Edit-affects-pending, Active idempotency / wrong group,
+  pause→activate, 6-field cron recurrence + next-exec, `@once` cleanup,
+  RemoveGroup cascade, DeleteJobs by name, attempts-exhausted → paused, gRPC
+  `success=false` retry with a stable idempotency key, history prune, stats.
+
+[Internal]
+
+* Dropped dead code and deps: `restresp`, `json-iterator`, `ReadyJob` proto,
+  `Quene.Remove`, `httpclient.Get`, machine ip/mac, `USER_` prefix strip;
+  regenerated protos with protoc-gen-go 1.36 / go-grpc 1.5. Structured `slog`
+  attributes in the HTTP layer; payloads are no longer logged. Lint clean.
+
 [v4.0.0]
 
 > **Breaking**: HTTP REST API redesigned to a clean resource-oriented shape under

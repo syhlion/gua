@@ -16,7 +16,8 @@ over **HTTP POST or gRPC Push**. gua nodes are stateless and scale horizontally.
 
 - **Register / CRUD** (consumer → gua): `RegisterGroup`, `AddJob`, `EditJob`,
   `PauseJob`, `ActiveJob`, `DeleteJob`, `ListJobs` — HTTP REST (`/v1/...`) and
-  the equivalent gRPC `GuaAdmin` service.
+  the equivalent gRPC `GuaAdmin` service. Both are thin adapters over one
+  `Quene` implementation, so validation and error semantics are identical.
 - **Delivery** (gua → consumer, when a job fires): the same envelope
   (`job_id, job_name, group_name, plan_time, exec_time, payload, idempotency_key`) is sent as a
   JSON `POST` (HTTP) or via `GuaCallback.OnJobTrigger` (gRPC Push). The
@@ -28,12 +29,31 @@ over **HTTP POST or gRPC Push**. gua nodes are stateless and scale horizontally.
 
 ![pipeline](diagrams/gua-pipeline.png)
 
-`AddJob` writes the job **definition** to `gua_jobs` (the source of truth) and
-schedules an **occurrence** with `river.Insert(ScheduledAt=run_at)`. River
-workers dequeue due rows with `FOR UPDATE SKIP LOCKED` (woken by LISTEN/NOTIFY),
-re-check the definition is still `active`, deliver the envelope, and record the
-attempt in `gua_executions`. `@once` jobs are done; recurring jobs re-insert the
-next occurrence (cron `Next()`). A failed delivery is retried by River.
+`AddJob` validates the job, writes its **definition** to `gua_jobs` (the source
+of truth) and schedules an **occurrence** with `river.Insert(ScheduledAt=run_at)`
+— in one transaction, so a definition never exists without its occurrence. The
+occurrence carries only the firing's identity (`job_id`, `group_name`,
+`plan_time`).
+
+River workers dequeue due rows with `FOR UPDATE SKIP LOCKED` (woken by
+LISTEN/NOTIFY) and then:
+
+1. **load the definition** from `gua_jobs` — a job deleted or paused after the
+   occurrence was scheduled is skipped, and an `Edit` made in the meantime is
+   what gets delivered;
+2. **deliver** the envelope with the job's `timeout` (default 30s, capped at
+   10m) and record the attempt in `gua_executions`;
+3. on success, drop a `@once` definition, or for a recurring job compute cron
+   `Next()`, store it as the definition's `exectime` (what the job list shows)
+   and insert the next occurrence — atomically, and only if the job is still
+   active;
+4. on failure, return the error so River retries with backoff; when the last
+   attempt (`GUA_MAX_ATTEMPTS`, default 25) fails the definition is **paused**
+   (`active=false`) so the exhausted job stays visible.
+
+`Pause`, `Delete`, `Active` and `RemoveGroup` replace or remove the pending
+occurrence in the same transaction as the definition change; `Active` never
+adds a second occurrence.
 
 - **Delivery is at-least-once**: River retries failures and rescues jobs from
   crashed workers, so a job can run more than once — **consumers must be
@@ -44,6 +64,9 @@ next occurrence (cron `Next()`). A failed delivery is retried by River.
   which adds a few seconds of latency vs an in-memory ticker. For scheduling at
   minute/hour granularity this is irrelevant; for sub-second precision it is the
   trade-off for durability. See [EVAL.md](EVAL.md) for measured numbers.
+- **Shutdown**: on SIGTERM the admin listeners drain, then River gets 10s for
+  in-flight deliveries and cancels the rest; a delivery cut off this way is
+  retried (same `idempotency_key`).
 
 ## Cluster & HA
 
@@ -53,17 +76,18 @@ Stateless horizontal scaling: every node dequeues from the same Postgres with
 `SKIP LOCKED`, so each job runs on exactly one node. There is **no** slot
 election, owner-token fencing, per-node bucket, down-server reclaim, or de-dup
 fence — Postgres row locks do the coordination. River runs its own leader
-election (PG advisory locks) for singleton maintenance (scheduler / rescuer),
-and its rescuer reclaims jobs left `running` by a crashed worker.
+election (PG advisory locks) for singleton maintenance (scheduler / rescuer /
+periodic jobs), and its rescuer reclaims jobs left `running` by a crashed
+worker after 15 minutes.
 
 ## Postgres schema
 
 | Table | Purpose |
 |---|---|
-| `gua_jobs` | job definitions (active/paused) — the source of truth |
+| `gua_jobs` | job definitions (active/paused) — the source of truth; `exectime` = next fire |
 | `gua_groups` | group namespace markers |
-| `gua_executions` | execution history (per attempt), pruned to `GUA_HISTORY_TTL` |
-| `river_job` (+ River's tables) | the queue: scheduled occurrences, retries, state |
+| `gua_executions` | execution history (per attempt); pruned to `GUA_HISTORY_TTL` by a periodic River job (indexed on `created_at`) |
+| `river_job` (+ River's tables) | the queue: scheduled occurrences, retries, state; gua matches its rows by `args @> {...}` to use River's GIN index |
 
 ## See also
 

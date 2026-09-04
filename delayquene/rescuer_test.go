@@ -76,7 +76,7 @@ func TestRiverRescuer(t *testing.T) {
 	if _, err := mig.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	pool.Exec(ctx, `TRUNCATE river_job`)
+	_, _ = pool.Exec(ctx, `TRUNCATE river_job`)
 
 	var attempts int32
 	ran2 := make(chan struct{}, 1)
@@ -100,7 +100,7 @@ func TestRiverRescuer(t *testing.T) {
 	defer func() {
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		client.Stop(sctx)
+		_ = client.Stop(sctx)
 	}()
 
 	if _, err := client.Insert(ctx, rescueProbeArgs{}, nil); err != nil {

@@ -17,18 +17,3 @@ message Job {
    bool active = 9;
    string memo = 10;
 }
-
-// ReadyJob is the envelope pushed onto the ready queue for a worker to fire.
-message ReadyJob {
-   string name = 1;
-   string Id = 2;
-   int64 timeout = 3;
-   string request_url = 4;
-   string payload = 5;
-   int64 plan_time = 6;
-   int64 get_job_time = 7;
-   string get_job_machine_host = 8;
-   string get_job_machine_mac = 9;
-   string get_job_machine_ip = 10;
-   string group_name = 11;
-}

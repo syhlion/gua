@@ -17,9 +17,10 @@ import (
 // per job, how late its callback arrives.
 //
 // Run with:
-//   GUA_STRESS=1 GUA_STRESS_N=1000 \
-//   GUA_PG_DSN='postgres://postgres:gua@localhost:5433/gua?sslmode=disable' \
-//   go test ./delayquene/ -run TestRiverStress -v -timeout 180s
+//
+//	GUA_STRESS=1 GUA_STRESS_N=1000 \
+//	GUA_PG_DSN='postgres://postgres:gua@localhost:5433/gua?sslmode=disable' \
+//	go test ./delayquene/ -run TestRiverStress -v -timeout 180s
 func TestRiverStress(t *testing.T) {
 	if os.Getenv("GUA_STRESS") == "" {
 		t.Skip("set GUA_STRESS=1 to run the River stress/timing test")
@@ -43,7 +44,7 @@ func TestRiverStress(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		var env TriggerEnvelope
-		json.NewDecoder(r.Body).Decode(&env)
+		_ = json.NewDecoder(r.Body).Decode(&env)
 		mu.Lock()
 		seen[env.JobId]++
 		if seen[env.JobId] == 1 {
