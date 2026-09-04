@@ -1,5 +1,13 @@
 [unrelease]
 
+[CI]
+
+* moved from the retired Drone pipeline to GitHub Actions
+  (`.github/workflows/ci.yml`): build / vet / golangci-lint / `go test -race`
+  against a Postgres 16 service on every push and PR; on `v*` tags the runtime
+  image is built and pushed to Docker Hub (`X.Y.Z`, `X.Y`, `X`, `latest`).
+  Deleted `.drone.yml`; README badge points at the workflow.
+
 [v5.0.0]
 
 > Full-code review 2026-09-04 (`docs/REVIEW-2026-09-04.md`): six confirmed

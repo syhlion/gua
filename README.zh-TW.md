@@ -1,7 +1,7 @@
 # gua
 
 [![Stars](https://img.shields.io/github/stars/syhlion/gua.svg)](https://github.com/syhlion/gua)
-[![Build Status](https://drone.syhlion.tw/api/badges/syhlion/gua/status.svg)](https://drone.syhlion.tw/syhlion/gua)
+[![CI](https://github.com/syhlion/gua/actions/workflows/ci.yml/badge.svg)](https://github.com/syhlion/gua/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/github/go-mod/go-version/syhlion/gua.svg)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Backed by PostgreSQL](https://img.shields.io/badge/backed%20by-PostgreSQL-336791.svg)](https://www.postgresql.org)

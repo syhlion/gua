@@ -1,0 +1,78 @@
+# CI for gua. Replaces the retired Drone pipeline (.drone.yml).
+#
+#   test    every push to master, every PR, every tag: build, vet, lint, and
+#           `go test -race` against a real Postgres 16 (the River/Postgres
+#           suites skip without GUA_PG_DSN, so the service is what makes them run).
+#   docker  tags only, after test passes: build the runtime image and push it
+#           to Docker Hub as <major>.<minor>.<patch>, <major>.<minor>, <major>
+#           and latest. Needs the DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets.
+#
+# Releases (git tag + GitHub Release notes) are still cut by hand with `gh`.
+name: ci
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gua
+          POSTGRES_PASSWORD: gua
+          POSTGRES_DB: gua
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U gua -d gua"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+      - run: go test -race -count=1 ./...
+        env:
+          GUA_PG_DSN: postgres://gua:gua@localhost:5432/gua?sslmode=disable
+
+  docker:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: syhlion/gua
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # stamped into main.version (GET /version); the Dockerfile's ARG
+          build-args: VERSION=${{ steps.meta.outputs.version }}
